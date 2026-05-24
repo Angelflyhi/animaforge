@@ -277,18 +277,17 @@ export class TimelinePanel {
 
   _collectKeyframes(layer) {
     const kfSet = new Set();
-    const collect = (obj) => {
-      if (!obj || typeof obj !== 'object') return;
-      if (obj.animated && Array.isArray(obj.keyframes)) {
-        obj.keyframes.forEach(kf => kfSet.add(kf.frame));
+    if (this.timelineEngine) {
+      const layerKfs = this.timelineEngine.getKeyframesForLayer(layer.id);
+      if (layerKfs) {
+        Object.values(layerKfs).forEach(kfList => {
+          if (Array.isArray(kfList)) {
+            kfList.forEach(kf => kfSet.add(kf.frame));
+          }
+        });
       }
-      for (const val of Object.values(obj)) {
-        if (val && typeof val === 'object') collect(val);
-      }
-    };
-    if (layer.transform) collect(layer.transform);
-    if (layer.shapes) collect(layer.shapes);
-    return Array.from(kfSet);
+    }
+    return Array.from(kfSet).sort((a, b) => a - b);
   }
 
   _renderKeyframeMarker(row, frame, layer) {
@@ -435,18 +434,23 @@ export class TimelinePanel {
   }
 
   _moveKeyframe(layerId, fromFrame, toFrame) {
-    const layer = this.layerManager?.getLayer(layerId);
-    if (!layer) return;
-    const move = (obj) => {
-      if (!obj || typeof obj !== 'object') return;
-      if (obj.animated && Array.isArray(obj.keyframes)) {
-        obj.keyframes.forEach(kf => { if (kf.frame === fromFrame) kf.frame = toFrame; });
+    if (!this.timelineEngine) return;
+    const layerKfs = this.timelineEngine.getKeyframesForLayer(layerId);
+    if (!layerKfs) return;
+
+    Object.values(layerKfs).forEach(kfList => {
+      if (Array.isArray(kfList)) {
+        kfList.forEach(kf => {
+          if (kf.frame === fromFrame) {
+            kf.frame = toFrame;
+          }
+        });
+        kfList.sort((a, b) => a.frame - b.frame);
       }
-      Object.values(obj).forEach(v => { if (v && typeof v === 'object') move(v); });
-    };
-    if (layer.transform) move(layer.transform);
-    if (layer.shapes) move(layer.shapes);
+    });
+
     this.renderKeyframes(layerId);
+    if (this.timelineEngine) this.timelineEngine.emit('keyframeMoved', { layerId, fromFrame, toFrame });
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────

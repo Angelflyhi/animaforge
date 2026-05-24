@@ -20,7 +20,7 @@ function hexToRgbArray(hex) {
 class LottieExporter {
   constructor() {}
 
-  export(project) {
+  export(project, keyframesStore) {
     const lottie = {
       v: '5.9.0',
       fr: project.frameRate || 30,
@@ -35,13 +35,13 @@ class LottieExporter {
     };
 
     if (project.layers) {
-      lottie.layers = project.layers.map((l, i) => this._exportLayer(l, i)).filter(Boolean);
+      lottie.layers = project.layers.map((l, i) => this._exportLayer(l, i, keyframesStore)).filter(Boolean);
     }
 
     return lottie;
   }
 
-  _exportLayer(layer, index) {
+  _exportLayer(layer, index, keyframesStore) {
     const base = {
       ty: this._getLayerTy(layer.type),
       nm: layer.name || `Layer ${index + 1}`,
@@ -51,7 +51,7 @@ class LottieExporter {
       st: layer.startTime ?? 0,
       bm: layer.blendMode ?? 0,
       hd: !layer.visible,
-      ks: this._exportTransform(layer.transform),
+      ks: this._exportTransform(layer.transform, layer.id, keyframesStore),
     };
 
     if (layer.parent) base.parent = layer.parent;
@@ -83,7 +83,7 @@ class LottieExporter {
     }
   }
 
-  _exportTransform(t) {
+  _exportTransform(t, layerId, keyframesStore) {
     if (!t) {
       return {
         a: { a: 0, k: [0, 0] },
@@ -94,12 +94,18 @@ class LottieExporter {
       };
     }
 
+    const layerKfs = keyframesStore?.[layerId] || {};
+    const w = t.w || 100, h = t.h || 100;
+    const ax = (t.anchorX ?? 0.5) * w;
+    const ay = (t.anchorY ?? 0.5) * h;
+    const op = (t.opacity ?? 1) * 100;
+
     return {
-      a: this._exportAnimatedValue([t.anchorX?.value ?? 0, t.anchorY?.value ?? 0], t.anchorX?.keyframes),
-      p: this._exportAnimatedValue([t.x?.value ?? 0, t.y?.value ?? 0], t.x?.keyframes),
-      s: this._exportAnimatedValue([t.scaleX?.value ?? 100, t.scaleY?.value ?? 100], t.scaleX?.keyframes),
-      r: this._exportAnimatedValue(t.rotation?.value ?? 0, t.rotation?.keyframes),
-      o: this._exportAnimatedValue(t.opacity?.value ?? 100, t.opacity?.keyframes),
+      a: this._exportAnimatedValue([ax, ay], layerKfs.anchor),
+      p: this._exportAnimatedValue([t.x ?? 0, t.y ?? 0], layerKfs.position),
+      s: this._exportAnimatedValue([(t.scaleX ?? 1) * 100, (t.scaleY ?? 1) * 100], layerKfs.scale),
+      r: this._exportAnimatedValue(t.rotation ?? 0, layerKfs.rotation),
+      o: this._exportAnimatedValue(op, layerKfs.opacity),
     };
   }
 
@@ -110,13 +116,32 @@ class LottieExporter {
 
     return {
       a: 1,
-      k: keyframes.map((kf, i) => ({
-        t: kf.frame,
-        s: Array.isArray(kf.value) ? kf.value : [kf.value],
-        e: keyframes[i + 1] ? (Array.isArray(keyframes[i + 1].value) ? keyframes[i + 1].value : [keyframes[i + 1].value]) : undefined,
-        o: { x: kf.easeOut?.x ?? [0.25], y: kf.easeOut?.y ?? [0] },
-        i: { x: kf.easeIn?.x ?? [0.75], y: kf.easeIn?.y ?? [1] },
-      })).filter(kf => kf.e !== undefined || keyframes.length === 1),
+      k: keyframes.map((kf, i) => {
+        let val = kf.value;
+        let endVal = keyframes[i + 1]?.value;
+
+        if (typeof val === 'object' && val !== null) {
+          val = [val.x ?? 0, val.y ?? 0];
+        } else {
+          val = [val];
+        }
+
+        if (endVal !== undefined) {
+          if (typeof endVal === 'object' && endVal !== null) {
+            endVal = [endVal.x ?? 0, endVal.y ?? 0];
+          } else {
+            endVal = [endVal];
+          }
+        }
+
+        return {
+          t: kf.frame,
+          s: val,
+          e: endVal,
+          o: { x: [0.25], y: [0] },
+          i: { x: [0.75], y: [1] },
+        };
+      }).filter(kf => kf.e !== undefined || keyframes.length === 1),
     };
   }
 
@@ -159,9 +184,10 @@ class LottieExporter {
 // ─── Canvas Renderer ─────────────────────────────────────────────────────────
 
 class CanvasRenderer {
-  constructor(width, height) {
+  constructor(width, height, timelineEngine = null) {
     this.width = width;
     this.height = height;
+    this.timelineEngine = timelineEngine;
     this.canvas = document.createElement('canvas');
     this.canvas.width = width;
     this.canvas.height = height;
@@ -179,7 +205,6 @@ class CanvasRenderer {
 
     if (!project.layers) return;
 
-    // Render layers bottom-to-top
     const sortedLayers = [...project.layers].reverse();
     for (const layer of sortedLayers) {
       if (!layer.visible) continue;
@@ -193,17 +218,25 @@ class CanvasRenderer {
     ctx.save();
 
     const t = layer.transform || {};
-    const x = this._getValue(t.x, frame) ?? 0;
-    const y = this._getValue(t.y, frame) ?? 0;
-    const rotation = this._getValue(t.rotation, frame) ?? 0;
-    const scaleX = (this._getValue(t.scaleX, frame) ?? 100) / 100;
-    const scaleY = (this._getValue(t.scaleY, frame) ?? 100) / 100;
-    const opacity = (this._getValue(t.opacity, frame) ?? 100) / 100;
-    const anchorX = this._getValue(t.anchorX, frame) ?? 0;
-    const anchorY = this._getValue(t.anchorY, frame) ?? 0;
+    let x = t.x ?? 0;
+    let y = t.y ?? 0;
+    let rotation = t.rotation ?? 0;
+    let scaleX = t.scaleX ?? 1;
+    let scaleY = t.scaleY ?? 1;
+    let opacity = t.opacity ?? 1;
+    const anchorX = (t.anchorX ?? 0.5) * (t.w || 100);
+    const anchorY = (t.anchorY ?? 0.5) * (t.h || 100);
+
+    if (this.timelineEngine) {
+      const state = this.timelineEngine.getAnimatedState(layer.id, frame);
+      if (state.position) { x = state.position.x; y = state.position.y; }
+      if (state.scale) { scaleX = state.scale.x; scaleY = state.scale.y; }
+      if (state.rotation !== undefined) { rotation = state.rotation; }
+      if (state.opacity !== undefined) { opacity = state.opacity; }
+    }
 
     ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
-    ctx.translate(x, y);
+    ctx.translate(x + anchorX, y + anchorY);
     ctx.rotate((rotation * Math.PI) / 180);
     ctx.scale(scaleX, scaleY);
     ctx.translate(-anchorX, -anchorY);
@@ -218,28 +251,6 @@ class CanvasRenderer {
     }
 
     ctx.restore();
-  }
-
-  _getValue(prop, frame) {
-    if (!prop) return null;
-    if (!prop.animated || !prop.keyframes?.length) return Array.isArray(prop.value) ? prop.value[0] : prop.value;
-
-    const kfs = prop.keyframes;
-    if (frame <= kfs[0].frame) return Array.isArray(kfs[0].value) ? kfs[0].value[0] : kfs[0].value;
-    if (frame >= kfs[kfs.length - 1].frame) {
-      const last = kfs[kfs.length - 1].value;
-      return Array.isArray(last) ? last[0] : last;
-    }
-
-    for (let i = 0; i < kfs.length - 1; i++) {
-      if (frame >= kfs[i].frame && frame < kfs[i + 1].frame) {
-        const t = (frame - kfs[i].frame) / (kfs[i + 1].frame - kfs[i].frame);
-        const v1 = Array.isArray(kfs[i].value) ? kfs[i].value[0] : kfs[i].value;
-        const v2 = Array.isArray(kfs[i + 1].value) ? kfs[i + 1].value[0] : kfs[i + 1].value;
-        return v1 + (v2 - v1) * t;
-      }
-    }
-    return null;
   }
 
   _renderShapeLayer(layer, frame) {
@@ -301,6 +312,28 @@ class CanvasRenderer {
     }
   }
 
+  _getValue(prop, frame) {
+    if (!prop) return null;
+    if (!prop.animated || !prop.keyframes?.length) return Array.isArray(prop.value) ? prop.value[0] : prop.value;
+
+    const kfs = prop.keyframes;
+    if (frame <= kfs[0].frame) return Array.isArray(kfs[0].value) ? kfs[0].value[0] : kfs[0].value;
+    if (frame >= kfs[kfs.length - 1].frame) {
+      const last = kfs[kfs.length - 1].value;
+      return Array.isArray(last) ? last[0] : last;
+    }
+
+    for (let i = 0; i < kfs.length - 1; i++) {
+      if (frame >= kfs[i].frame && frame < kfs[i + 1].frame) {
+        const t = (frame - kfs[i].frame) / (kfs[i + 1].frame - kfs[i].frame);
+        const v1 = Array.isArray(kfs[i].value) ? kfs[i].value[0] : kfs[i].value;
+        const v2 = Array.isArray(kfs[i + 1].value) ? kfs[i + 1].value[0] : kfs[i + 1].value;
+        return v1 + (v2 - v1) * t;
+      }
+    }
+    return null;
+  }
+
   _getVec2(prop, frame) {
     if (!prop) return null;
     if (!prop.animated) return Array.isArray(prop.value) ? prop.value : [prop.value, prop.value];
@@ -343,8 +376,6 @@ class CanvasRenderer {
   }
 
   _renderImageLayer(layer) {
-    // Images are rendered via the editor's image cache in production
-    // Here we attempt to draw if src is a data URL
     if (!layer._cachedImage && layer.src) {
       const img = new Image();
       img.src = layer.src;
@@ -375,7 +406,7 @@ class GifEncoder {
     this.width = width;
     this.height = height;
     this.frames = [];
-    this.repeat = 0; // 0 = loop forever
+    this.repeat = 0;
     this.quality = 10;
   }
 
@@ -383,14 +414,11 @@ class GifEncoder {
     this.frames.push({ imageData, delay });
   }
 
-  /** NeuQuant color quantization (simplified to median cut) */
   _quantize(pixels, maxColors) {
-    // Build palette using median cut algorithm
     const palette = [];
     const cubes = [{ pixels: pixels.slice(), min: [0, 0, 0], max: [255, 255, 255] }];
 
     while (palette.length < maxColors && cubes.length > 0) {
-      // Find cube with largest range
       let bestIdx = 0;
       let bestRange = 0;
       for (let i = 0; i < cubes.length; i++) {
@@ -439,7 +467,6 @@ class GifEncoder {
       cubes.push(left, right);
     }
 
-    // Add representative color from each cube
     for (const cube of cubes) {
       if (!cube.pixels.length) continue;
       const avg = cube.pixels.reduce(
@@ -525,7 +552,7 @@ class GifEncoder {
       for (let j = 0; j < chunk; j++) result.push(data[i + j]);
       i += chunk;
     }
-    result.push(0); // block terminator
+    result.push(0);
     return result;
   }
 
@@ -537,18 +564,15 @@ class GifEncoder {
     const writeByte = (n) => bytes.push(n & 0xFF);
     const writeStr = (s) => { for (let i = 0; i < s.length; i++) writeByte(s.charCodeAt(i)); };
 
-    // --- GIF Header ---
     writeStr('GIF89a');
     writeWord(w);
     writeWord(h);
 
-    // Global color table flag: we'll set one with 256 colors
-    const gctSizePow = 7; // 2^(7+1) = 256 colors
-    writeByte(0x80 | (gctSizePow << 4) | gctSizePow); // packed: GCT present, color res 7, GCT size 7
-    writeByte(0); // background color index
-    writeByte(0); // pixel aspect ratio
+    const gctSizePow = 7;
+    writeByte(0x80 | (gctSizePow << 4) | gctSizePow);
+    writeByte(0);
+    writeByte(0);
 
-    // Build global palette from first frame
     const firstPixels = [];
     const firstData = this.frames[0]?.imageData?.data;
     if (firstData) {
@@ -558,51 +582,43 @@ class GifEncoder {
     }
     const palette = this._quantize(firstPixels, 256);
 
-    // Write GCT
     for (let i = 0; i < 256; i++) {
       const c = palette[i] || [0, 0, 0];
       writeByte(c[0]); writeByte(c[1]); writeByte(c[2]);
     }
 
-    // Netscape application extension (looping)
     writeByte(0x21); writeByte(0xFF); writeByte(11);
     writeStr('NETSCAPE2.0');
     writeByte(3); writeByte(1);
     writeWord(this.repeat);
     writeByte(0);
 
-    // --- Frames ---
     for (const frame of this.frames) {
       const { imageData, delay } = frame;
       const data = imageData.data;
 
-      // Graphic Control Extension
       writeByte(0x21); writeByte(0xF9); writeByte(4);
-      writeByte(0x00); // disposal method = 0
-      writeWord(Math.round(delay / 10)); // delay in centiseconds
-      writeByte(0); // transparent color index (none)
-      writeByte(0); // block terminator
+      writeByte(0x00);
+      writeWord(Math.round(delay / 10));
+      writeByte(0);
+      writeByte(0);
 
-      // Image Descriptor
       writeByte(0x2C);
-      writeWord(0); writeWord(0); // left, top
+      writeWord(0); writeWord(0);
       writeWord(w); writeWord(h);
-      writeByte(0x00); // no local CT, not interlaced
+      writeByte(0x00);
 
-      // Quantize pixels to palette indices
       const indices = new Uint8Array(w * h);
       for (let i = 0; i < w * h; i++) {
         indices[i] = this._closestPaletteIndex(data[i * 4], data[i * 4 + 1], data[i * 4 + 2], palette);
       }
 
-      // LZW encode
       const minCodeSize = 8;
       writeByte(minCodeSize);
       const compressed = this._lzwEncode(indices, minCodeSize);
       bytes.push(...this._writeSubBlocks(compressed));
     }
 
-    // Trailer
     writeByte(0x3B);
     return new Uint8Array(bytes);
   }
@@ -716,15 +732,14 @@ export class ExportManager {
     if (this.editor && typeof this.editor.getProject === 'function') {
       return this.editor.getProject();
     }
-    // Fallback: access common editor properties
     return {
       name: this.editor?.project?.name || 'AnimaForge',
       width: this.editor?.project?.width || this.editor?.width || 512,
       height: this.editor?.project?.height || this.editor?.height || 512,
-      frameRate: this.editor?.project?.frameRate || this.editor?.frameRate || 30,
+      frameRate: this.editor?.project?.fps || this.editor?.project?.frameRate || 30,
       inPoint: this.editor?.project?.inPoint || 0,
-      outPoint: this.editor?.project?.outPoint || 60,
-      layers: this.editor?.project?.layers || this.editor?.layerManager?.getAllLayers() || [],
+      outPoint: this.editor?.project?.totalFrames || 60,
+      layers: this.editor?.layerManager?.getAllLayers() || [],
     };
   }
 
@@ -735,18 +750,19 @@ export class ExportManager {
   // ─── Format Handlers ─────────────────────────────────────────────────────
 
   async _exportLottie(project, options) {
-    const lottieJson = this._lottieExporter.export(project);
+    const kfs = this.editor?.timelineEngine?.getAllKeyframes() || {};
+    const lottieJson = this._lottieExporter.export(project, kfs);
     const jsonStr = JSON.stringify(lottieJson, null, options.pretty ? 2 : 0);
     return new Blob([jsonStr], { type: 'application/json' });
   }
 
   async _exportTGS(project, options) {
-    const lottieJson = this._lottieExporter.export(project);
+    const kfs = this.editor?.timelineEngine?.getAllKeyframes() || {};
+    const lottieJson = this._lottieExporter.export(project, kfs);
     const jsonStr = JSON.stringify(lottieJson);
     const uint8 = new TextEncoder().encode(jsonStr);
     const compressed = gzipSync(uint8, { level: 9 });
 
-    // TGS size warning
     if (compressed.byteLength > 64 * 1024) {
       console.warn(`TGS export: file size ${compressed.byteLength} bytes exceeds Telegram's 64KB limit. Consider simplifying the animation.`);
     }
@@ -755,7 +771,8 @@ export class ExportManager {
   }
 
   async _exportDotLottie(project, options) {
-    const lottieJson = this._lottieExporter.export(project);
+    const kfs = this.editor?.timelineEngine?.getAllKeyframes() || {};
+    const lottieJson = this._lottieExporter.export(project, kfs);
     const jsonStr = JSON.stringify(lottieJson);
     const jsonBytes = new TextEncoder().encode(jsonStr);
 
@@ -779,7 +796,7 @@ export class ExportManager {
     const { frameRate = 30, inPoint = 0, outPoint = 60, width = 512, height = 512 } = project;
     const delay = Math.round(1000 / frameRate);
     const encoder = new GifEncoder(width, height);
-    const renderer = new CanvasRenderer(width, height);
+    const renderer = new CanvasRenderer(width, height, this.editor?.timelineEngine);
 
     for (let frame = inPoint; frame < outPoint; frame++) {
       renderer.renderFrame(project, frame);
@@ -794,7 +811,7 @@ export class ExportManager {
   async _exportPNG(project, options) {
     const { width = 512, height = 512 } = project;
     const frame = options.frame ?? this._getCurrentFrame();
-    const renderer = new CanvasRenderer(width, height);
+    const renderer = new CanvasRenderer(width, height, this.editor?.timelineEngine);
     renderer.renderFrame(project, frame);
     return renderer.toBlob('image/png');
   }
@@ -803,7 +820,7 @@ export class ExportManager {
     const { width = 512, height = 512 } = project;
     const frame = options.frame ?? this._getCurrentFrame();
     const quality = options.quality ?? 0.92;
-    const renderer = new CanvasRenderer(width, height);
+    const renderer = new CanvasRenderer(width, height, this.editor?.timelineEngine);
     renderer.renderFrame(project, frame);
     return renderer.toBlob('image/jpeg', quality);
   }
@@ -816,7 +833,7 @@ export class ExportManager {
 
   async _exportPNGSequence(project, options) {
     const { frameRate = 30, inPoint = 0, outPoint = 60, width = 512, height = 512 } = project;
-    const renderer = new CanvasRenderer(width, height);
+    const renderer = new CanvasRenderer(width, height, this.editor?.timelineEngine);
     const files = {};
 
     for (let frame = inPoint; frame < outPoint; frame++) {
@@ -830,7 +847,7 @@ export class ExportManager {
       files[`frame_${paddedFrame}.png`] = bytes;
     }
 
-    const zipped = zipSync(files, { level: 1 }); // low compression for speed
+    const zipped = zipSync(files, { level: 1 });
     return new Blob([zipped], { type: 'application/zip' });
   }
 
@@ -859,7 +876,7 @@ export class ExportManager {
 
       recorder.start();
 
-      const renderer = new CanvasRenderer(width, height);
+      const renderer = new CanvasRenderer(width, height, this.editor?.timelineEngine);
       const ctx = canvas.getContext('2d');
       const totalFrames = outPoint - inPoint;
       const msPerFrame = 1000 / frameRate;
