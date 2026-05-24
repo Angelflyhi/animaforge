@@ -660,8 +660,125 @@ function createImageLayer(name, dataUrl, width, height) {
     src: dataUrl,
     width,
     height,
-    transform: { x: { value: 0 }, y: { value: 0 }, rotation: { value: 0 }, scaleX: { value: 100 }, scaleY: { value: 100 }, opacity: { value: 100 }, anchorX: { value: 0 }, anchorY: { value: 0 } },
+    transform: { x: 0, y: 0, w: width, h: height, rotation: 0, scaleX: 1, scaleY: 1, anchorX: 0.5, anchorY: 0.5 },
   };
+}
+
+// ─── SVG Path Parser ─────────────────────────────────────────────────────────
+
+function parseSVGPath(d) {
+  const commands = [];
+  const regex = /([MLHVCSQTAZz])([^MLHVCSQTAZz]*)/g;
+  let match;
+  while ((match = regex.exec(d)) !== null) {
+    const cmd = match[1];
+    const argsStr = match[2].trim();
+    const args = argsStr ? argsStr.split(/[\s,]+/).map(Number).filter(n => !isNaN(n)) : [];
+
+    if (cmd === 'z' || cmd === 'Z') {
+      commands.push({ cmd: 'Z', args: [] });
+    } else if (['M', 'm', 'L', 'l'].includes(cmd)) {
+      const finalCmd = cmd.toUpperCase();
+      for (let i = 0; i < args.length; i += 2) {
+        if (args[i] !== undefined && args[i+1] !== undefined) {
+          commands.push({ cmd: finalCmd, args: [args[i], args[i+1]] });
+        }
+      }
+    } else if (['C', 'c'].includes(cmd)) {
+      const finalCmd = 'C';
+      for (let i = 0; i < args.length; i += 6) {
+        if (args[i+5] !== undefined) {
+          commands.push({ cmd: finalCmd, args: args.slice(i, i + 6) });
+        }
+      }
+    } else if (['Q', 'q'].includes(cmd)) {
+      const finalCmd = 'Q';
+      for (let i = 0; i < args.length; i += 4) {
+        if (args[i+3] !== undefined) {
+          commands.push({ cmd: finalCmd, args: args.slice(i, i + 4) });
+        }
+      }
+    }
+  }
+  return commands;
+}
+
+// ─── Lottie Shape Mapping Helper ─────────────────────────────────────────────
+
+function mapLottieShapeToLayer(s, name) {
+  const layer = {
+    id: `lottie-shape-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: s.name || name,
+    type: 'shape',
+    visible: !s.hidden,
+    transform: { x: 0, y: 0, w: 100, h: 100, rotation: 0, scaleX: 1, scaleY: 1, anchorX: 0.5, anchorY: 0.5 },
+  };
+
+  if (s.type === 'rc') {
+    layer.shapeType = 'rect';
+    const pos = s.position?.value || [0, 0];
+    const size = s.size?.value || [100, 100];
+    layer.transform.x = pos[0] - size[0] / 2;
+    layer.transform.y = pos[1] - size[1] / 2;
+    layer.transform.w = size[0];
+    layer.transform.h = size[1];
+    layer.shape = { kind: 'rect', roundness: s.roundness?.value || 0 };
+  } else if (s.type === 'el') {
+    layer.shapeType = 'ellipse';
+    const pos = s.position?.value || [0, 0];
+    const size = s.size?.value || [100, 100];
+    layer.transform.x = pos[0] - size[0] / 2;
+    layer.transform.y = pos[1] - size[1] / 2;
+    layer.transform.w = size[0];
+    layer.transform.h = size[1];
+    layer.shape = { kind: 'ellipse' };
+  } else if (s.type === 'sh') {
+    layer.shapeType = 'path';
+    layer.shape = { kind: 'path', path: [] };
+    const vertices = s.vertices?.value || {};
+    if (vertices.v && Array.isArray(vertices.v)) {
+      const pathCmds = [];
+      const v = vertices.v, inT = vertices.i, outT = vertices.o;
+      for (let i = 0; i < v.length; i++) {
+        if (i === 0) {
+          pathCmds.push({ cmd: 'M', args: [v[0][0], v[0][1]] });
+        } else {
+          const prevV = v[i - 1];
+          const prevOut = outT[i - 1];
+          const currIn = inT[i];
+          const currV = v[i];
+          pathCmds.push({
+            cmd: 'C',
+            args: [
+              prevV[0] + prevOut[0], prevV[1] + prevOut[1],
+              currV[0] + currIn[0], currV[1] + currIn[1],
+              currV[0], currV[1]
+            ]
+          });
+        }
+      }
+      if (vertices.c) {
+        const prevV = v[v.length - 1];
+        const prevOut = outT[v.length - 1];
+        const currIn = inT[0];
+        const currV = v[0];
+        pathCmds.push({
+          cmd: 'C',
+          args: [
+            prevV[0] + prevOut[0], prevV[1] + prevOut[1],
+            currV[0] + currIn[0], currV[1] + currIn[1],
+            currV[0], currV[1]
+          ]
+        });
+        pathCmds.push({ cmd: 'Z', args: [] });
+      }
+      layer.shape.path = pathCmds;
+    }
+  } else {
+    return null;
+  }
+
+  return layer;
 }
 
 // ─── ImportManager ───────────────────────────────────────────────────────────
@@ -676,36 +793,291 @@ export class ImportManager {
   /**
    * Import a File object into the editor.
    * @param {File} file
-   * @returns {Promise<Object>} Imported project or layer data
+   * @returns {Promise<Object>} Normalized project structure
    */
   async importFile(file) {
     const ext = file.name.split('.').pop().toLowerCase();
     const buffer = await file.arrayBuffer();
 
+    let rawProject;
     switch (ext) {
       case 'json':
-        return this._importLottieJSON(buffer, file.name);
+        rawProject = await this._importLottieJSON(buffer, file.name);
+        break;
 
       case 'tgs':
-        return this._importTGS(buffer, file.name);
+        rawProject = await this._importTGS(buffer, file.name);
+        break;
 
       case 'lottie':
-        return this._importDotLottie(buffer, file.name);
+        rawProject = await this._importDotLottie(buffer, file.name);
+        break;
 
       case 'gif':
-        return this._importGIF(buffer, file.name);
+        rawProject = await this._importGIF(buffer, file.name);
+        break;
 
       case 'png':
       case 'jpg':
       case 'jpeg':
-        return this._importRasterImage(buffer, file.name, file.type);
+        rawProject = await this._importRasterImage(buffer, file.name, file.type);
+        break;
 
       case 'svg':
-        return this._importSVG(buffer, file.name);
+        rawProject = await this._importSVG(buffer, file.name);
+        break;
 
       default:
         throw new Error(`Unsupported file format: .${ext}`);
     }
+
+    return this.normalizeProject(rawProject);
+  }
+
+  // ─── Project & Layer Normalizer ──────────────────────────────────────────
+
+  normalizeProject(rawProj) {
+    const keyframes = {};
+    const normalizedLayers = [];
+
+    const width = rawProj.width || 512;
+    const height = rawProj.height || 512;
+
+    if (Array.isArray(rawProj.layers)) {
+      rawProj.layers.forEach(l => {
+        const norm = this._normalizeLayer(l, width, height, keyframes);
+        if (norm) normalizedLayers.push(norm);
+      });
+    }
+
+    return {
+      name: rawProj.name || 'Imported Project',
+      width,
+      height,
+      fps: rawProj.frameRate || 30,
+      totalFrames: (rawProj.outPoint - rawProj.inPoint) || 90,
+      backgroundColor: rawProj.backgroundColor || '#1a1a2e',
+      transparent: rawProj.transparent || false,
+      layers: normalizedLayers,
+      keyframes: keyframes
+    };
+  }
+
+  _normalizeLayer(l, width, height, keyframesStore) {
+    const id = l.id || `layer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const name = l.name || `${l.type || 'Layer'}`;
+    const type = l.type || 'shape';
+    const visible = l.visible !== false;
+    const locked = !!l.locked;
+    const solo = !!l.solo;
+    const opacity = typeof l.opacity === 'number' ? l.opacity : 1;
+    const blendMode = l.blendMode || 'normal';
+
+    // Normalize transform
+    const transform = {
+      x: 0,
+      y: 0,
+      w: 100,
+      h: 100,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      anchorX: 0.5,
+      anchorY: 0.5,
+    };
+
+    if (l.transform) {
+      const srcT = l.transform;
+      const getVal = (field, dflt) => {
+        if (field === undefined || field === null) return dflt;
+        if (typeof field === 'object' && field.value !== undefined) {
+          return field.value;
+        }
+        return typeof field === 'number' ? field : dflt;
+      };
+
+      transform.x = getVal(srcT.x, 0);
+      transform.y = getVal(srcT.y, 0);
+      transform.w = typeof srcT.w === 'number' ? srcT.w : (l.width || 100);
+      transform.h = typeof srcT.h === 'number' ? srcT.h : (l.height || 100);
+      transform.rotation = getVal(srcT.rotation, 0);
+
+      let scaleX = getVal(srcT.scaleX, 100);
+      let scaleY = getVal(srcT.scaleY, 100);
+      if (scaleX > 5) scaleX /= 100;
+      if (scaleY > 5) scaleY /= 100;
+      transform.scaleX = scaleX;
+      transform.scaleY = scaleY;
+
+      let ax = getVal(srcT.anchorX, 0);
+      let ay = getVal(srcT.anchorY, 0);
+      if (ax > 1 && transform.w > 0) ax /= transform.w;
+      if (ay > 1 && transform.h > 0) ay /= transform.h;
+      if (ax < 0 || ax > 1) ax = 0.5;
+      if (ay < 0 || ay > 1) ay = 0.5;
+      transform.anchorX = ax;
+      transform.anchorY = ay;
+
+      // Extract keyframes for standard fields
+      if (srcT.x && srcT.x.animated && Array.isArray(srcT.x.keyframes)) {
+        if (!keyframesStore[id]) keyframesStore[id] = {};
+        keyframesStore[id]['position'] = srcT.x.keyframes.map(kf => {
+          const val = kf.value;
+          return {
+            frame: kf.frame,
+            value: {
+              x: Array.isArray(val) ? val[0] : val,
+              y: Array.isArray(val) ? val[1] ?? val[0] : val,
+            },
+            easing: kf.hold ? 'hold' : 'ease-in-out'
+          };
+        });
+      }
+
+      if (srcT.scaleX && srcT.scaleX.animated && Array.isArray(srcT.scaleX.keyframes)) {
+        if (!keyframesStore[id]) keyframesStore[id] = {};
+        keyframesStore[id]['scale'] = srcT.scaleX.keyframes.map(kf => {
+          const val = kf.value;
+          return {
+            frame: kf.frame,
+            value: {
+              x: (Array.isArray(val) ? val[0] : val) / 100,
+              y: (Array.isArray(val) ? val[1] ?? val[0] : val) / 100,
+            },
+            easing: kf.hold ? 'hold' : 'ease-in-out'
+          };
+        });
+      }
+
+      if (srcT.rotation && srcT.rotation.animated && Array.isArray(srcT.rotation.keyframes)) {
+        if (!keyframesStore[id]) keyframesStore[id] = {};
+        keyframesStore[id]['rotation'] = srcT.rotation.keyframes.map(kf => {
+          const val = kf.value;
+          return {
+            frame: kf.frame,
+            value: Array.isArray(val) ? val[0] : val,
+            easing: kf.hold ? 'hold' : 'ease-in-out'
+          };
+        });
+      }
+
+      if (srcT.opacity && srcT.opacity.animated && Array.isArray(srcT.opacity.keyframes)) {
+        if (!keyframesStore[id]) keyframesStore[id] = {};
+        keyframesStore[id]['opacity'] = srcT.opacity.keyframes.map(kf => {
+          const val = kf.value;
+          return {
+            frame: kf.frame,
+            value: (Array.isArray(val) ? val[0] : val) / 100,
+            easing: kf.hold ? 'hold' : 'ease-in-out'
+          };
+        });
+      }
+    }
+
+    // Normalize Fill
+    const fill = { type: 'solid', color: '#4f8ef7', opacity: 1 };
+    if (l.fill) {
+      fill.type = l.fill.type || 'solid';
+      fill.color = l.fill.color || '#4f8ef7';
+      fill.opacity = typeof l.fill.opacity === 'number' ? l.fill.opacity : 1;
+      if (l.fill.gradient) fill.gradient = l.fill.gradient;
+    }
+
+    // Normalize Stroke
+    const stroke = { color: '#ffffff', width: 0, opacity: 1, cap: 'round', join: 'round', dash: [] };
+    if (l.stroke) {
+      stroke.color = l.stroke.color || '#ffffff';
+      stroke.width = typeof l.stroke.width === 'number' ? l.stroke.width : 0;
+      stroke.opacity = typeof l.stroke.opacity === 'number' ? l.stroke.opacity : 1;
+      stroke.cap = l.stroke.cap || 'round';
+      stroke.join = l.stroke.join || 'round';
+      stroke.dash = Array.isArray(l.stroke.dash) ? l.stroke.dash : [];
+    }
+
+    // Shape specifics
+    const shape = { kind: l.shapeType || 'rect', sides: 5, innerRadius: 0.5, path: [], roundness: 0 };
+    if (l.shape) {
+      shape.kind = l.shape.kind || l.shapeType || 'rect';
+      shape.sides = l.shape.sides || 5;
+      shape.innerRadius = l.shape.innerRadius || 0.5;
+      shape.path = l.shape.path || [];
+      shape.roundness = l.shape.roundness || 0;
+    }
+    if (l.d) {
+      shape.kind = 'path';
+      shape.path = parseSVGPath(l.d);
+    }
+
+    // Text specifics
+    const text = { content: 'Text', fontFamily: 'Inter, sans-serif', fontSize: 32, fontWeight: '400', textAlign: 'left' };
+    if (l.text) {
+      text.content = l.text.content || l.content || 'Text';
+      text.fontFamily = l.text.fontFamily || 'Inter, sans-serif';
+      text.fontSize = l.text.fontSize || 32;
+      text.fontWeight = l.text.fontWeight || '400';
+      text.textAlign = l.text.textAlign || 'left';
+    } else if (l.content) {
+      text.content = l.content;
+      text.fontSize = l.fontSize || 32;
+      text.fontFamily = l.fontFamily || 'sans-serif';
+    }
+
+    // Image specifics
+    const image = { src: l.src || l.imageSrc || '', fit: 'contain' };
+    if (l.image) {
+      image.src = l.image.src || l.src || '';
+      image.fit = l.image.fit || 'contain';
+    }
+
+    const children = [];
+    if (Array.isArray(l.children)) {
+      l.children.forEach(child => {
+        const normChild = this._normalizeLayer(child, width, height, keyframesStore);
+        if (normChild) children.push(normChild);
+      });
+    }
+
+    if (Array.isArray(l.shapes)) {
+      l.shapes.forEach((s, idx) => {
+        if (s.type === 'gr' && Array.isArray(s.items)) {
+          s.items.forEach((item, itemIdx) => {
+            const shapeLayer = mapLottieShapeToLayer(item, `${name} - Shape ${idx + 1}.${itemIdx + 1}`);
+            if (shapeLayer) {
+              const normChild = this._normalizeLayer(shapeLayer, width, height, keyframesStore);
+              if (normChild) children.push(normChild);
+            }
+          });
+        } else {
+          const shapeLayer = mapLottieShapeToLayer(s, `${name} - Shape ${idx + 1}`);
+          if (shapeLayer) {
+            const normChild = this._normalizeLayer(shapeLayer, width, height, keyframesStore);
+            if (normChild) children.push(normChild);
+          }
+        }
+      });
+    }
+
+    const normalized = {
+      id,
+      name,
+      type: children.length > 0 && type !== 'group' ? 'group' : type,
+      visible,
+      locked,
+      solo,
+      opacity,
+      blendMode,
+      transform,
+      fill,
+      stroke,
+      effects: l.effects || [],
+      children,
+    };
+
+    if (normalized.type === 'shape') normalized.shape = shape;
+    if (normalized.type === 'text') normalized.text = text;
+    if (normalized.type === 'image') normalized.image = image;
+
+    return normalized;
   }
 
   // ─── Private Format Handlers ─────────────────────────────────────────────
@@ -720,7 +1092,6 @@ export class ImportManager {
     }
 
     if (!json.v && !json.fr) {
-      // Not a Lottie file, might be other JSON
       throw new Error(`File ${filename} does not appear to be a valid Lottie animation`);
     }
 
@@ -760,16 +1131,13 @@ export class ImportManager {
       throw new Error(`Failed to unzip .lottie file: ${e.message}`);
     }
 
-    // dotLottie spec: animations are in animations/ directory
     let animJson = null;
     let animKey = null;
 
-    // Try animations/animation.json first
     if (files['animations/animation.json']) {
       animJson = files['animations/animation.json'];
       animKey = 'animations/animation.json';
     } else {
-      // Find the first animation file
       for (const key of Object.keys(files)) {
         if (key.startsWith('animations/') && key.endsWith('.json')) {
           animJson = files[key];
@@ -795,7 +1163,6 @@ export class ImportManager {
     project.sourceFile = filename;
     project.sourceFormat = 'dotlottie';
 
-    // Extract manifest if available
     if (files['manifest.json']) {
       try {
         project.manifest = JSON.parse(new TextDecoder().decode(files['manifest.json']));
@@ -817,7 +1184,6 @@ export class ImportManager {
     const { width, height, frames } = gifData;
     const layers = [];
 
-    // Convert each frame's ImageData to a canvas data URL
     const offscreen = document.createElement('canvas');
     offscreen.width = width;
     offscreen.height = height;

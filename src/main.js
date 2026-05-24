@@ -1016,8 +1016,38 @@ function createNewProject() {
 async function handleImportFile(file) {
   try {
     showToast(`Importing ${file.name}...`, 'info', 2000);
-    await importManager.importFile(file);
-    showToast(`${file.name} imported successfully!`, 'success', 3000);
+    const imported = await importManager.importFile(file);
+    if (!imported) {
+      throw new Error('No data imported');
+    }
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    const isProjectFile = ['json', 'tgs', 'lottie'].includes(ext);
+    const isCurrentProjectEmpty = layerManager.getAllLayers().length === 0;
+
+    if (isProjectFile || isCurrentProjectEmpty) {
+      editor.openProject(imported);
+      showToast(`${file.name} opened as project successfully!`, 'success', 3000);
+    } else {
+      // Add as layers into the existing project
+      if (imported.layers && Array.isArray(imported.layers)) {
+        imported.layers.forEach(layer => {
+          layerManager.importLayer(layer);
+        });
+      }
+      // Import keyframes
+      if (imported.keyframes) {
+        Object.entries(imported.keyframes).forEach(([layerId, propKfs]) => {
+          Object.entries(propKfs).forEach(([propName, kfs]) => {
+            kfs.forEach(kf => {
+              timelineEngine.addKeyframe(layerId, propName, kf.frame, kf.value, kf.easing);
+            });
+          });
+        });
+      }
+      editor.refresh();
+      showToast(`Layers from ${file.name} imported successfully!`, 'success', 3000);
+    }
   } catch (err) {
     console.error('Import error:', err);
     showToast(`Import failed: ${err.message}`, 'error', 4000);
