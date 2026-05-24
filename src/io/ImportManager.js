@@ -549,7 +549,6 @@ class LottieParser {
     if (!prop) return { value: 0, animated: false };
 
     if (prop.a === 0) {
-      // Static
       return { value: prop.k, animated: false, keyframes: [] };
     }
 
@@ -837,6 +836,11 @@ export class ImportManager {
   // ─── Project & Layer Normalizer ──────────────────────────────────────────
 
   normalizeProject(rawProj) {
+    // If it's already a native AnimaForge project structure
+    if (rawProj.sourceFormat === 'animaforge') {
+      return rawProj;
+    }
+
     const keyframes = {};
     const normalizedLayers = [];
 
@@ -1038,11 +1042,46 @@ export class ImportManager {
     }
 
     if (Array.isArray(l.shapes)) {
+      let shapeFillColor = '#4f8ef7';
+      let shapeFillOpacity = 1;
+      let shapeStrokeColor = '#ffffff';
+      let shapeStrokeWidth = 0;
+
+      const scanStyles = (items) => {
+        items.forEach(item => {
+          if (item.type === 'fl' && item.color) {
+            const rgb = item.color.value || [0.3, 0.5, 0.9];
+            const r = Math.round(rgb[0] * 255);
+            const g = Math.round(rgb[1] * 255);
+            const b = Math.round(rgb[2] * 255);
+            const toHex = n => n.toString(16).padStart(2, '0');
+            shapeFillColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+            shapeFillOpacity = (item.opacity?.value ?? 100) / 100;
+          }
+          if (item.type === 'st' && item.color) {
+            const rgb = item.color.value || [1, 1, 1];
+            const r = Math.round(rgb[0] * 255);
+            const g = Math.round(rgb[1] * 255);
+            const b = Math.round(rgb[2] * 255);
+            const toHex = n => n.toString(16).padStart(2, '0');
+            shapeStrokeColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+            shapeStrokeWidth = item.width?.value ?? 2;
+          }
+          if (item.type === 'gr' && Array.isArray(item.items)) {
+            scanStyles(item.items);
+          }
+        });
+      };
+
+      scanStyles(l.shapes);
+
       l.shapes.forEach((s, idx) => {
         if (s.type === 'gr' && Array.isArray(s.items)) {
           s.items.forEach((item, itemIdx) => {
             const shapeLayer = mapLottieShapeToLayer(item, `${name} - Shape ${idx + 1}.${itemIdx + 1}`);
             if (shapeLayer) {
+              shapeLayer.fill = { type: 'solid', color: shapeFillColor, opacity: shapeFillOpacity };
+              shapeLayer.stroke = { color: shapeStrokeColor, width: shapeStrokeWidth, opacity: 1, cap: 'round', join: 'round', dash: [] };
               const normChild = this._normalizeLayer(shapeLayer, width, height, keyframesStore);
               if (normChild) children.push(normChild);
             }
@@ -1050,6 +1089,8 @@ export class ImportManager {
         } else {
           const shapeLayer = mapLottieShapeToLayer(s, `${name} - Shape ${idx + 1}`);
           if (shapeLayer) {
+            shapeLayer.fill = { type: 'solid', color: shapeFillColor, opacity: shapeFillOpacity };
+            shapeLayer.stroke = { color: shapeStrokeColor, width: shapeStrokeWidth, opacity: 1, cap: 'round', join: 'round', dash: [] };
             const normChild = this._normalizeLayer(shapeLayer, width, height, keyframesStore);
             if (normChild) children.push(normChild);
           }
@@ -1089,6 +1130,22 @@ export class ImportManager {
       json = JSON.parse(text);
     } catch (e) {
       throw new Error(`Invalid JSON in file: ${filename}`);
+    }
+
+    // Check if it's an AnimaForge saved project
+    if (json.layers && json.keyframes && json.version) {
+      return {
+        name: json.name || 'Untitled Project',
+        width: json.width || 512,
+        height: json.height || 512,
+        frameRate: json.fps || 30,
+        inPoint: 0,
+        outPoint: json.totalFrames || 90,
+        layers: json.layers,
+        keyframes: json.keyframes,
+        sourceFormat: 'animaforge',
+        sourceFile: filename
+      };
     }
 
     if (!json.v && !json.fr) {

@@ -1021,33 +1021,49 @@ async function handleImportFile(file) {
       throw new Error('No data imported');
     }
 
-    const ext = file.name.split('.').pop().toLowerCase();
-    const isProjectFile = ['json', 'tgs', 'lottie'].includes(ext);
     const isCurrentProjectEmpty = layerManager.getAllLayers().length === 0;
 
-    if (isProjectFile || isCurrentProjectEmpty) {
-      editor.openProject(imported);
-      showToast(`${file.name} opened as project successfully!`, 'success', 3000);
-    } else {
-      // Add as layers into the existing project
-      if (imported.layers && Array.isArray(imported.layers)) {
-        imported.layers.forEach(layer => {
-          layerManager.importLayer(layer);
-        });
+    if (isCurrentProjectEmpty) {
+      // If project is currently empty, adjust settings to match the imported file
+      editor.project.width = imported.width || 512;
+      editor.project.height = imported.height || 512;
+      editor.project.fps = imported.fps || 30;
+      editor.project.totalFrames = imported.totalFrames || 90;
+      editor.project.backgroundColor = imported.backgroundColor || '#1a1a2e';
+      editor.project.transparent = imported.transparent || false;
+
+      timelineEngine.setDuration(editor.project.totalFrames);
+      timelineEngine.setFps(editor.project.fps);
+      timelineEngine.setFrame(0);
+
+      if (renderEngine) {
+        renderEngine.resize(editor.project.width, editor.project.height);
+        renderEngine.setBackground(editor.project.backgroundColor, editor.project.transparent);
       }
-      // Import keyframes
-      if (imported.keyframes) {
-        Object.entries(imported.keyframes).forEach(([layerId, propKfs]) => {
-          Object.entries(propKfs).forEach(([propName, kfs]) => {
-            kfs.forEach(kf => {
-              timelineEngine.addKeyframe(layerId, propName, kf.frame, kf.value, kf.easing);
-            });
+      editor._updateCanvasContainer();
+    }
+
+    // ALWAYS import all layers from the file into the existing project
+    if (imported.layers && Array.isArray(imported.layers)) {
+      imported.layers.forEach(layer => {
+        layerManager.importLayer(layer);
+      });
+    }
+
+    // Merge keyframes
+    if (imported.keyframes) {
+      Object.entries(imported.keyframes).forEach(([layerId, propKfs]) => {
+        Object.entries(propKfs).forEach(([propName, kfs]) => {
+          kfs.forEach(kf => {
+            timelineEngine.addKeyframe(layerId, propName, kf.frame, kf.value, kf.easing);
           });
         });
-      }
-      editor.refresh();
-      showToast(`Layers from ${file.name} imported successfully!`, 'success', 3000);
+      });
     }
+
+    editor.refresh();
+    showToast(`${file.name} imported successfully!`, 'success', 3000);
+
   } catch (err) {
     console.error('Import error:', err);
     showToast(`Import failed: ${err.message}`, 'error', 4000);
