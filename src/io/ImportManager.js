@@ -735,40 +735,72 @@ function mapLottieShapeToLayer(s, name) {
     layer.shapeType = 'path';
     layer.shape = { kind: 'path', path: [] };
     const vertices = s.vertices?.value || {};
-    if (vertices.v && Array.isArray(vertices.v)) {
+    if (vertices.v && Array.isArray(vertices.v) && vertices.v.length > 0) {
+      const xs = vertices.v.map(v => v[0]);
+      const ys = vertices.v.map(v => v[1]);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+
+      const w = maxX - minX;
+      const h = maxY - minY;
+
+      layer.transform.x = minX;
+      layer.transform.y = minY;
+      layer.transform.w = w || 10;
+      layer.transform.h = h || 10;
+
       const pathCmds = [];
       const v = vertices.v, inT = vertices.i, outT = vertices.o;
       for (let i = 0; i < v.length; i++) {
         if (i === 0) {
-          pathCmds.push({ cmd: 'M', args: [v[0][0], v[0][1]] });
+          pathCmds.push({ cmd: 'M', args: [v[0][0] - minX, v[0][1] - minY] });
         } else {
           const prevV = v[i - 1];
-          const prevOut = outT[i - 1];
-          const currIn = inT[i];
+          const prevOut = (outT && outT[i - 1]) ? outT[i - 1] : [0, 0];
+          const currIn = (inT && inT[i]) ? inT[i] : [0, 0];
           const currV = v[i];
-          pathCmds.push({
-            cmd: 'C',
-            args: [
-              prevV[0] + prevOut[0], prevV[1] + prevOut[1],
-              currV[0] + currIn[0], currV[1] + currIn[1],
-              currV[0], currV[1]
-            ]
-          });
+          
+          const hasTangent = prevOut[0] !== 0 || prevOut[1] !== 0 || currIn[0] !== 0 || currIn[1] !== 0;
+          if (hasTangent) {
+            pathCmds.push({
+              cmd: 'C',
+              args: [
+                prevV[0] + (prevOut[0] || 0) - minX, prevV[1] + (prevOut[1] || 0) - minY,
+                currV[0] + (currIn[0] || 0) - minX, currV[1] + (currIn[1] || 0) - minY,
+                currV[0] - minX, currV[1] - minY
+              ]
+            });
+          } else {
+            pathCmds.push({
+              cmd: 'L',
+              args: [currV[0] - minX, currV[1] - minY]
+            });
+          }
         }
       }
       if (vertices.c) {
         const prevV = v[v.length - 1];
-        const prevOut = outT[v.length - 1];
-        const currIn = inT[0];
+        const prevOut = (outT && outT[v.length - 1]) ? outT[v.length - 1] : [0, 0];
+        const currIn = (inT && inT[0]) ? inT[0] : [0, 0];
         const currV = v[0];
-        pathCmds.push({
-          cmd: 'C',
-          args: [
-            prevV[0] + prevOut[0], prevV[1] + prevOut[1],
-            currV[0] + currIn[0], currV[1] + currIn[1],
-            currV[0], currV[1]
-          ]
-        });
+        const hasTangent = prevOut[0] !== 0 || prevOut[1] !== 0 || currIn[0] !== 0 || currIn[1] !== 0;
+        if (hasTangent) {
+          pathCmds.push({
+            cmd: 'C',
+            args: [
+              prevV[0] + (prevOut[0] || 0) - minX, prevV[1] + (prevOut[1] || 0) - minY,
+              currV[0] + (currIn[0] || 0) - minX, currV[1] + (currIn[1] || 0) - minY,
+              currV[0] - minX, currV[1] - minY
+            ]
+          });
+        } else {
+          pathCmds.push({
+            cmd: 'L',
+            args: [currV[0] - minX, currV[1] - minY]
+          });
+        }
         pathCmds.push({ cmd: 'Z', args: [] });
       }
       layer.shape.path = pathCmds;
@@ -1048,23 +1080,43 @@ export class ImportManager {
       let shapeStrokeWidth = 0;
 
       const scanStyles = (items) => {
+        if (!Array.isArray(items)) return;
         items.forEach(item => {
+          if (!item) return;
           if (item.type === 'fl' && item.color) {
-            const rgb = item.color.value || [0.3, 0.5, 0.9];
-            const r = Math.round(rgb[0] * 255);
-            const g = Math.round(rgb[1] * 255);
-            const b = Math.round(rgb[2] * 255);
-            const toHex = n => n.toString(16).padStart(2, '0');
-            shapeFillColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+            let rgb = item.color.value;
+            if (!Array.isArray(rgb)) {
+              if (typeof rgb === 'string') {
+                shapeFillColor = rgb;
+              } else {
+                rgb = [0.3, 0.5, 0.9];
+              }
+            }
+            if (Array.isArray(rgb)) {
+              const r = Math.round((rgb[0] ?? 0.3) * 255);
+              const g = Math.round((rgb[1] ?? 0.5) * 255);
+              const b = Math.round((rgb[2] ?? 0.9) * 255);
+              const toHex = n => (isNaN(n) ? '00' : Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0'));
+              shapeFillColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+            }
             shapeFillOpacity = (item.opacity?.value ?? 100) / 100;
           }
           if (item.type === 'st' && item.color) {
-            const rgb = item.color.value || [1, 1, 1];
-            const r = Math.round(rgb[0] * 255);
-            const g = Math.round(rgb[1] * 255);
-            const b = Math.round(rgb[2] * 255);
-            const toHex = n => n.toString(16).padStart(2, '0');
-            shapeStrokeColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+            let rgb = item.color.value;
+            if (!Array.isArray(rgb)) {
+              if (typeof rgb === 'string') {
+                shapeStrokeColor = rgb;
+              } else {
+                rgb = [1, 1, 1];
+              }
+            }
+            if (Array.isArray(rgb)) {
+              const r = Math.round((rgb[0] ?? 1) * 255);
+              const g = Math.round((rgb[1] ?? 1) * 255);
+              const b = Math.round((rgb[2] ?? 1) * 255);
+              const toHex = n => (isNaN(n) ? 'ff' : Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0'));
+              shapeStrokeColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+            }
             shapeStrokeWidth = item.width?.value ?? 2;
           }
           if (item.type === 'gr' && Array.isArray(item.items)) {

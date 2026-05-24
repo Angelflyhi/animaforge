@@ -184,23 +184,19 @@ export class RenderEngine {
   render(frame) {
     const canvas = this._canvas;
     const ctx = this._ctx;
-
-    // Resize display canvas to match DOM element
-    const dpr = window.devicePixelRatio || 1;
-    const cssW = canvas.clientWidth  || canvas.width;
-    const cssH = canvas.clientHeight || canvas.height;
-    if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
-      canvas.width  = Math.round(cssW * dpr);
-      canvas.height = Math.round(cssH * dpr);
-      ctx.scale(dpr, dpr);
-    }
+    const cssW = canvas.width;
+    const cssH = canvas.height;
 
     // Clear
     ctx.clearRect(0, 0, cssW, cssH);
 
     // Background
     if (this._transparent) {
-      ctx.drawImage(this._checkerboard, 0, 0, cssW, cssH);
+      if (!this._checkerPattern) {
+        this._checkerPattern = ctx.createPattern(this._checkerPatternCanvas, 'repeat');
+      }
+      ctx.fillStyle = this._checkerPattern || 'transparent';
+      ctx.fillRect(0, 0, cssW, cssH);
     } else {
       ctx.fillStyle = '#111118';
       ctx.fillRect(0, 0, cssW, cssH);
@@ -272,7 +268,7 @@ export class RenderEngine {
         this._renderSolid(layer, ctx, frame);
         break;
       case 'null':
-        if (process.env.NODE_ENV === 'development') {
+        if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') {
           this._renderNullLayer(layer, ctx);
         }
         break;
@@ -462,6 +458,60 @@ export class RenderEngine {
     ctx.setLineDash([]);
   }
 
+  getLayerMatrix(layer, frame) {
+    let matrix = new DOMMatrix();
+
+    // 1. Get ancestors from top to bottom
+    const ancestors = [];
+    let parent = this._layerManager ? this._layerManager.getParentLayer(layer.id) : null;
+    while (parent) {
+      ancestors.unshift(parent);
+      parent = this._layerManager ? this._layerManager.getParentLayer(parent.id) : null;
+    }
+
+    // 2. Accumulate viewport offset and zoom first
+    matrix = matrix.translate(this._offsetX, this._offsetY);
+    matrix = matrix.scale(this._zoom, this._zoom);
+
+    // 3. Accumulate ancestor transforms
+    ancestors.forEach(anc => {
+      const t = anc.transform;
+      let { x, y, rotation, scaleX, scaleY, anchorX, anchorY, w, h } = t;
+      if (this._timelineEngine) {
+        const state = this._timelineEngine.getAnimatedState(anc.id, frame);
+        if (state.position)  { x = state.position.x; y = state.position.y; }
+        if (state.scale)     { scaleX = state.scale.x; scaleY = state.scale.y; }
+        if (state.rotation)  { rotation = state.rotation; }
+      }
+      const pivotX = x + w * anchorX;
+      const pivotY = y + h * anchorY;
+
+      matrix = matrix.translate(pivotX, pivotY);
+      if (rotation) matrix = matrix.rotate(rotation);
+      if (scaleX !== 1 || scaleY !== 1) matrix = matrix.scale(scaleX, scaleY);
+      matrix = matrix.translate(-pivotX, -pivotY);
+    });
+
+    // 4. Finally, accumulate the layer's own transform
+    const t = layer.transform;
+    let { x, y, rotation, scaleX, scaleY, anchorX, anchorY, w, h } = t;
+    if (this._timelineEngine) {
+      const state = this._timelineEngine.getAnimatedState(layer.id, frame);
+      if (state.position)  { x = state.position.x; y = state.position.y; }
+      if (state.scale)     { scaleX = state.scale.x; scaleY = state.scale.y; }
+      if (state.rotation)  { rotation = state.rotation; }
+    }
+    const pivotX = x + w * anchorX;
+    const pivotY = y + h * anchorY;
+
+    matrix = matrix.translate(pivotX, pivotY);
+    if (rotation) matrix = matrix.rotate(rotation);
+    if (scaleX !== 1 || scaleY !== 1) matrix = matrix.scale(scaleX, scaleY);
+    matrix = matrix.translate(-pivotX, -pivotY);
+
+    return matrix;
+  }
+
   // ─── Selection Handles ───────────────────────────────────────────────────
 
   /**
@@ -470,30 +520,37 @@ export class RenderEngine {
    */
   drawSelectionHandles(layer, ctx, frame) {
     const t = layer.transform;
-    let { x, y, w, h, rotation } = t;
+    let { x, y, w, h } = t;
 
     if (this._timelineEngine) {
       const state = this._timelineEngine.getAnimatedState(layer.id, frame);
       if (state.position) { x = state.position.x; y = state.position.y; }
     }
 
-    // Corner points in canvas space
-    const corners = [
-      { name: 'nw', cx: x,     cy: y },
-      { name: 'ne', cx: x + w, cy: y },
-      { name: 'se', cx: x + w, cy: y + h },
-      { name: 'sw', cx: x,     cy: y + h },
-      // Edge midpoints
-      { name: 'n',  cx: x + w / 2, cy: y },
-      { name: 'e',  cx: x + w,     cy: y + h / 2 },
-      { name: 's',  cx: x + w / 2, cy: y + h },
-      { name: 'w',  cx: x,         cy: y + h / 2 },
-    ];
+    const matrix = this.getLayerMatrix(layer, frame);
+    const projectPoint = (cx, cy) => {
+      const pt = new DOMPoint(cx, cy);
+      const res = pt.matrixTransform(matrix);
+      return { x: res.x, y: res.y };
+    };
 
-    // Draw selection rect first
-    const tl = this.canvasToScreen(x, y);
-    const br = this.canvasToScreen(x + w, y + h);
-    const sw = br.x - tl.x, sh = br.y - tl.y;
+    const tl = projectPoint(x, y);
+    const tr = projectPoint(x + w, y);
+    const br = projectPoint(x + w, y + h);
+    const bl = projectPoint(x, y + h);
+
+    // Corner and edge midpoint points
+    const corners = [
+      { name: 'nw', x: tl.x, y: tl.y },
+      { name: 'ne', x: tr.x, y: tr.y },
+      { name: 'se', x: br.x, y: br.y },
+      { name: 'sw', x: bl.x, y: bl.y },
+      // Edge midpoints
+      { name: 'n',  ...projectPoint(x + w / 2, y) },
+      { name: 'e',  ...projectPoint(x + w,     y + h / 2) },
+      { name: 's',  ...projectPoint(x + w / 2, y + h) },
+      { name: 'w',  ...projectPoint(x,         y + h / 2) },
+    ];
 
     ctx.save();
     ctx.strokeStyle = SELECTION_COLOR;
@@ -501,19 +558,18 @@ export class RenderEngine {
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
 
-    if (rotation !== 0) {
-      const pivotS = this.canvasToScreen(x + w * t.anchorX, y + h * t.anchorY);
-      ctx.translate(pivotS.x, pivotS.y);
-      ctx.rotate(degToRad(rotation));
-      ctx.translate(-pivotS.x, -pivotS.y);
-    }
-
-    ctx.fillRect(tl.x, tl.y, sw, sh);
-    ctx.strokeRect(tl.x, tl.y, sw, sh);
+    // Draw selection polygon
+    ctx.beginPath();
+    ctx.moveTo(tl.x, tl.y);
+    ctx.lineTo(tr.x, tr.y);
+    ctx.lineTo(br.x, br.y);
+    ctx.lineTo(bl.x, bl.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
 
     // Handles
-    corners.forEach(({ name, cx, cy }) => {
-      const { x: sx, y: sy } = this.canvasToScreen(cx, cy);
+    corners.forEach(({ name, x: sx, y: sy }) => {
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = HANDLE_COLOR;
       ctx.lineWidth = 1.5;
@@ -525,9 +581,18 @@ export class RenderEngine {
       this._selectionHandles.push({ name, screenX: sx, screenY: sy, layer });
     });
 
-    // Rotation handle (above top-center)
-    const rotSrc = this.canvasToScreen(x + w / 2, y);
-    const rotHandle = { x: rotSrc.x, y: rotSrc.y - 24 };
+    // Rotation handle (above top-center perpendicular to top edge)
+    const rotSrc = projectPoint(x + w / 2, y);
+    const dx = tr.x - tl.x;
+    const dy = tr.y - tl.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const px = dy / len;
+    const py = -dx / len;
+    const rotHandle = {
+      x: rotSrc.x + px * 24,
+      y: rotSrc.y + py * 24
+    };
+
     ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 1;
     ctx.beginPath();

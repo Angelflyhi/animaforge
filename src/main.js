@@ -136,6 +136,24 @@ function bindMenuEvents() {
     });
   });
 
+  // Stop click event propagation inside the menu dropdown to protect the active trusted user gesture
+  // (which is required by browsers to trigger programmatically opened file selectors and modals)
+  // and close dropdowns asynchronously in a microtask.
+  document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+    dropdown.addEventListener('click', (e) => {
+      const targetItem = e.target.closest('.dropdown-item');
+      // If the clicked item has a submenu, do not stop propagation or close the menu asynchronously
+      if (targetItem && (targetItem.classList.contains('has-submenu') || targetItem.classList.contains('submenu-toggle'))) {
+        return;
+      }
+      e.stopPropagation();
+      // Close dropdowns in a tiny timeout to ensure the browser has fully processed the click/user gesture
+      setTimeout(() => {
+        document.querySelectorAll('.menu-item.open').forEach(i => i.classList.remove('open'));
+      }, 50);
+    });
+  });
+
   document.addEventListener('click', () => {
     document.querySelectorAll('.menu-item.open').forEach(i => i.classList.remove('open'));
   });
@@ -616,6 +634,7 @@ function bindKeyboardShortcuts() {
         case 'v': e.preventDefault(); editor.paste(); break;
         case 'd': e.preventDefault(); editor.duplicateSelected(); break;
         case 'a': e.preventDefault(); editor.selectAll(); break;
+        case 'i': e.preventDefault(); triggerFileImport('.json,.lottie,.tgs,.gif,.png,.jpg,.jpeg,.svg,.zip'); break;
         case 'g': e.preventDefault(); e.shiftKey ? editor.ungroupSelected() : editor.groupSelected(); break;
         case 'e': e.preventDefault(); openModal('modal-export'); break;
         case 'n': e.preventDefault(); openModal('modal-new-project'); break;

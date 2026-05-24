@@ -247,6 +247,26 @@ export class LayerManager extends EventEmitter {
   }
 
   /**
+   * Get the parent of a layer by its ID.
+   */
+  getParentLayer(childId) {
+    return this._findParent(this._layers, childId);
+  }
+
+  _findParent(layers, childId) {
+    for (const layer of layers) {
+      if (layer.children) {
+        if (layer.children.some(c => c.id === childId)) {
+          return layer;
+        }
+        const parent = this._findParent(layer.children, childId);
+        if (parent) return parent;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Get all top-level layers in order (index 0 = top/front).
    */
   getAllLayers() {
@@ -394,9 +414,44 @@ export class LayerManager extends EventEmitter {
    * Simple AABB test – the RenderEngine handles precise pixel testing.
    */
   getLayerAt(x, y) {
-    for (const layer of this._layers) {
+    return this._findLayerAt(this._layers, x, y);
+  }
+
+  _findLayerAt(layers, x, y) {
+    for (const layer of layers) {
       if (!layer.visible || layer.locked) continue;
-      const t = layer.transform;
+
+      const t = layer.transform || { x: 0, y: 0, w: 100, h: 100, rotation: 0, scaleX: 1, scaleY: 1, anchorX: 0.5, anchorY: 0.5 };
+
+      // 1. If it is a group, recursively check children first (higher priority)
+      if (layer.type === 'group' && layer.children && layer.children.length > 0) {
+        const px = t.x + t.w * (t.anchorX ?? 0.5);
+        const py = t.y + t.h * (t.anchorY ?? 0.5);
+
+        // Translate relative to pivot
+        const dx = x - px;
+        const dy = y - py;
+
+        // Rotate back (inverse rotation)
+        const rad = -(t.rotation || 0) * Math.PI / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        let rx = dx * cos - dy * sin;
+        let ry = dx * sin + dy * cos;
+
+        // Scale back
+        rx /= (t.scaleX || 1);
+        ry /= (t.scaleY || 1);
+
+        // Translate back to group local space
+        const localX = rx + px;
+        const localY = ry + py;
+
+        const hitChild = this._findLayerAt(layer.children, localX, localY);
+        if (hitChild) return hitChild;
+      }
+
+      // 2. Direct hit test on this layer
       if (x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h) {
         return layer;
       }

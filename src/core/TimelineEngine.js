@@ -293,8 +293,8 @@ export class TimelineEngine extends EventEmitter {
   }
 
   // ─── Frame Navigation ─────────────────────────────────────────────────────
-
   setFrame(n) {
+    if (n === undefined || n === null || isNaN(n)) return;
     const clamped = Math.max(0, Math.min(Math.floor(n), this._totalFrames - 1));
     if (clamped !== this._currentFrame) {
       this._currentFrame = clamped;
