@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AnimaForge - Professional Animation Editor. Create, edit, and export TGS, Lottie, GIF, dotLottie animations with a professional-grade timeline editor." />
+  <title>AnimaForge – Professional Animation Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Splash / Loading Screen -->
+    <div id="splash-screen">
+      <div class="splash-content">
+        <div class="splash-logo">
+          <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="logoGrad" x1="0" y1="0" x2="60" y2="60" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#7C3AED"/>
+                <stop offset="50%" stop-color="#4F46E5"/>
+                <stop offset="100%" stop-color="#06B6D4"/>
+              </linearGradient>
+            </defs>
+            <rect width="60" height="60" rx="14" fill="url(#logoGrad)"/>
+            <path d="M15 42 L30 18 L45 42" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <circle cx="30" cy="32" r="5" fill="white" opacity="0.9"/>
+          </svg>
+        </div>
+        <h1 class="splash-title">AnimaForge</h1>
+        <p class="splash-subtitle">Professional Animation Studio</p>
+        <div class="splash-loader">
+          <div class="splash-progress-bar"></div>
+        </div>
+        <p class="splash-status" id="splash-status">Initializing engine...</p>
+      </div>
+    </div>
+
+    <!-- Main Editor Layout -->
+    <div id="editor-layout" class="hidden">
+      <!-- Top Menu Bar -->
+      <header id="menu-bar">
+        <div class="menu-left">
+          <div class="app-logo">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="28">
+              <rect width="32" height="32" rx="8" fill="url(#logoGradSm)"/>
+              <defs>
+                <linearGradient id="logoGradSm" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#7C3AED"/>
+                  <stop offset="100%" stop-color="#06B6D4"/>
+                </linearGradient>
+              </defs>
+              <path d="M8 24 L16 10 L24 24" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <circle cx="16" cy="18" r="3" fill="white"/>
+            </svg>
+            <span class="app-name">AnimaForge</span>
+          </div>
+          <nav class="menu-nav">
+            <div class="menu-item" id="menu-file">
+              File
+              <div class="menu-dropdown" id="dropdown-file">
+                <div class="dropdown-item" id="btn-new-project"><span class="shortcut">Ctrl+N</span>New Project</div>
+                <div class="dropdown-item" id="btn-open-project"><span class="shortcut">Ctrl+O</span>Open Project</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-import-file"><span class="shortcut">Ctrl+I</span>Import File...</div>
+                <div class="dropdown-item" id="btn-import-lottie">Import Lottie/JSON</div>
+                <div class="dropdown-item" id="btn-import-tgs">Import TGS (Telegram Sticker)</div>
+                <div class="dropdown-item" id="btn-import-gif">Import GIF</div>
+                <div class="dropdown-item" id="btn-import-image">Import Image (PNG/JPEG/SVG)</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-save"><span class="shortcut">Ctrl+S</span>Save</div>
+                <div class="dropdown-item" id="btn-save-as"><span class="shortcut">Ctrl+Shift+S</span>Save As...</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item has-submenu" id="btn-export-menu">Export As ▶
+                  <div class="submenu" id="submenu-export">
+                    <div class="dropdown-item" id="export-lottie">Export as Lottie JSON</div>
+                    <div class="dropdown-item" id="export-dotlottie">Export as .dotLottie</div>
+                    <div class="dropdown-item" id="export-tgs">Export as TGS (Telegram)</div>
+                    <div class="dropdown-item" id="export-gif">Export as GIF</div>
+                    <div class="dropdown-item" id="export-png-seq">Export as PNG Sequence</div>
+                    <div class="dropdown-item" id="export-png">Export Frame as PNG</div>
+                    <div class="dropdown-item" id="export-jpeg">Export Frame as JPEG</div>
+                    <div class="dropdown-item" id="export-svg">Export as SVG</div>
+                    <div class="dropdown-item" id="export-mp4">Export as Video (MP4)</div>
+                    <div class="dropdown-item" id="export-webm">Export as WebM</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="menu-item" id="menu-edit">
+              Edit
+              <div class="menu-dropdown" id="dropdown-edit">
+                <div class="dropdown-item" id="btn-undo"><span class="shortcut">Ctrl+Z</span>Undo</div>
+                <div class="dropdown-item" id="btn-redo"><span class="shortcut">Ctrl+Y</span>Redo</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-cut"><span class="shortcut">Ctrl+X</span>Cut</div>
+                <div class="dropdown-item" id="btn-copy"><span class="shortcut">Ctrl+C</span>Copy</div>
+                <div class="dropdown-item" id="btn-paste"><span class="shortcut">Ctrl+V</span>Paste</div>
+                <div class="dropdown-item" id="btn-duplicate"><span class="shortcut">Ctrl+D</span>Duplicate</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-select-all"><span class="shortcut">Ctrl+A</span>Select All</div>
+                <div class="dropdown-item" id="btn-deselect">Deselect All</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-preferences">Preferences</div>
+              </div>
+            </div>
+            <div class="menu-item" id="menu-layer">
+              Layer
+              <div class="menu-dropdown" id="dropdown-layer">
+                <div class="dropdown-item" id="btn-new-shape-layer">New Shape Layer</div>
+                <div class="dropdown-item" id="btn-new-text-layer">New Text Layer</div>
+                <div class="dropdown-item" id="btn-new-null-layer">New Null Layer</div>
+                <div class="dropdown-item" id="btn-new-solid-layer">New Solid Layer</div>
+                <div class="dropdown-item" id="btn-new-group">New Group</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-layer-duplicate">Duplicate Layer</div>
+                <div class="dropdown-item" id="btn-layer-delete">Delete Layer</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-bring-forward">Bring Forward</div>
+                <div class="dropdown-item" id="btn-send-backward">Send Backward</div>
+                <div class="dropdown-item" id="btn-bring-to-front">Bring to Front</div>
+                <div class="dropdown-item" id="btn-send-to-back">Send to Back</div>
+              </div>
+            </div>
+            <div class="menu-item" id="menu-view">
+              View
+              <div class="menu-dropdown" id="dropdown-view">
+                <div class="dropdown-item" id="btn-zoom-in"><span class="shortcut">Ctrl++</span>Zoom In</div>
+                <div class="dropdown-item" id="btn-zoom-out"><span class="shortcut">Ctrl+-</span>Zoom Out</div>
+                <div class="dropdown-item" id="btn-zoom-fit"><span class="shortcut">Ctrl+0</span>Fit to Window</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-toggle-grid">Toggle Grid</div>
+                <div class="dropdown-item" id="btn-toggle-rulers">Toggle Rulers</div>
+                <div class="dropdown-item" id="btn-toggle-guides">Toggle Guides</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item submenu-toggle" id="btn-theme-menu">Theme ▶
+                  <div class="submenu" id="submenu-theme">
+                    <div class="dropdown-item" id="theme-dark">Dark (Default)</div>
+                    <div class="dropdown-item" id="theme-darker">Darker</div>
+                    <div class="dropdown-item" id="theme-light">Light</div>
+                    <div class="dropdown-item" id="theme-midnight">Midnight Blue</div>
+                    <div class="dropdown-item" id="theme-forest">Forest</div>
+                    <div class="dropdown-item" id="theme-rose">Rose Gold</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="menu-item" id="menu-animation">
+              Animation
+              <div class="menu-dropdown" id="dropdown-animation">
+                <div class="dropdown-item" id="btn-add-keyframe"><span class="shortcut">K</span>Add Keyframe</div>
+                <div class="dropdown-item" id="btn-del-keyframe">Delete Keyframe</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-ease-in">Ease In</div>
+                <div class="dropdown-item" id="btn-ease-out">Ease Out</div>
+                <div class="dropdown-item" id="btn-ease-inout">Ease In & Out</div>
+                <div class="dropdown-item" id="btn-linear">Linear</div>
+                <div class="dropdown-separator"></div>
+                <div class="dropdown-item" id="btn-preview-animation">Preview Animation</div>
+              </div>
+            </div>
+            <div class="menu-item" id="menu-help">
+              Help
+              <div class="menu-dropdown" id="dropdown-help">
+                <div class="dropdown-item" id="btn-shortcuts">Keyboard Shortcuts</div>
+                <div class="dropdown-item" id="btn-about">About AnimaForge</div>
+              </div>
+            </div>
+          </nav>
+        </div>
+
+        <!-- Center: Transport Controls -->
+        <div class="menu-center">
+          <div class="transport-controls">
+            <button class="transport-btn" id="btn-go-start" title="Go to Start (Home)">⏮</button>
+            <button class="transport-btn" id="btn-step-back" title="Step Back (,)">⏪</button>
+            <button class="transport-btn transport-play" id="btn-play-pause" title="Play/Pause (Space)">▶</button>
+            <button class="transport-btn" id="btn-step-forward" title="Step Forward (.)">⏩</button>
+            <button class="transport-btn" id="btn-go-end" title="Go to End">⏭</button>
+            <button class="transport-btn toggle-btn" id="btn-loop" title="Loop">🔁</button>
+          </div>
+          <div class="time-display">
+            <input type="text" id="current-time-input" class="time-input" value="0:00:00" title="Current Time" />
+            <span class="time-separator">/</span>
+            <span id="total-duration" class="time-total">0:03:00</span>
+            <span class="fps-badge" id="fps-display">30fps</span>
+          </div>
+        </div>
+
+        <!-- Right: Tools & Settings -->
+        <div class="menu-right">
+          <button class="header-btn" id="btn-preview" title="Preview">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+            Preview
+          </button>
+          <button class="header-btn header-btn-primary" id="btn-export-quick" title="Export">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            Export
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Editor Area -->
+      <div id="editor-main">
+        <!-- Left Sidebar: Tools + Layers -->
+        <aside id="left-sidebar">
+          <!-- Tool Bar -->
+          <div id="toolbar">
+            <button class="tool-btn active" id="tool-select" title="Select (V)" data-tool="select">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 0l16 12.279-6.951 1.001 4.Creating 10.588-3.418 1.132-4.2-10.588-5.431 4.288z"/></svg>
+            </button>
+            <button class="tool-btn" id="tool-direct-select" title="Direct Select (A)" data-tool="direct-select">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l16 12-7-1 4 10-3 1-4-10-6 4z"/></svg>
+            </button>
+            <div class="tool-separator"></div>
+            <button class="tool-btn" id="tool-rect" title="Rectangle (R)" data-tool="rect">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="1"/></svg>
+            </button>
+            <button class="tool-btn" id="tool-ellipse" title="Ellipse (E)" data-tool="ellipse">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="9" ry="7"/></svg>
+            </button>
+            <button class="tool-btn" id="tool-polygon" title="Polygon" data-tool="polygon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3L21 8.5V15.5L12 21L3 15.5V8.5Z"/></svg>
+            </button>
+            <button class="tool-btn" id="tool-star" title="Star" data-tool="star">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </button>
+            <button class="tool-btn" id="tool-path" title="Pen/Path (P)" data-tool="path">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+            </button>
+            <button class="tool-btn" id="tool-text" title="Text (T)" data-tool="text">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.5 4h-13C4.7 4 4 4.7 4 5.5v1C4 7.3 4.7 8 5.5 8H11v11.5c0 .8.7 1.5 1.5 1.5s1.5-.7 1.5-1.5V8h5.5c.8 0 1.5-.7 1.5-1.5v-1c0-.8-.7-1.5-1.5-1.5z"/></svg>
+            </button>
+            <div class="tool-separator"></div>
+            <button class="tool-btn" id="tool-hand" title="Hand (H)" data-tool="hand">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3zm7-13h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg>
+            </button>
+            <button class="tool-btn" id="tool-zoom" title="Zoom (Z)" data-tool="zoom">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35M11 8v6M8 11h6"/></svg>
+            </button>
+            <div class="tool-separator"></div>
+            <!-- Fill/Stroke Color pickers -->
+            <div class="color-wells">
+              <div class="color-well-stack">
+                <div class="color-well" id="fill-well" title="Fill Color" style="background: #4F46E5;"></div>
+                <div class="color-well color-well-stroke" id="stroke-well" title="Stroke Color" style="background: #ffffff;"></div>
+              </div>
+              <div class="color-well-actions">
+                <div class="swap-colors" id="btn-swap-colors" title="Swap Fill/Stroke (X)">⇄</div>
+                <div class="default-colors" id="btn-default-colors" title="Default Colors (D)">◻</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Layers Panel -->
+          <div id="layers-panel">
+            <div class="panel-header">
+              <span class="panel-title">Layers</span>
+              <div class="panel-actions">
+                <button class="panel-action-btn" id="btn-add-layer" title="Add Layer">+</button>
+                <button class="panel-action-btn" id="btn-add-group" title="Add Group">⊞</button>
+                <button class="panel-action-btn" id="btn-delete-layer" title="Delete Layer">🗑</button>
+              </div>
+            </div>
+            <div id="layers-list" class="layers-list">
+              <!-- Layers populated dynamically -->
+            </div>
+          </div>
+        </aside>
+
+        <!-- Canvas Area -->
+        <main id="canvas-area">
+          <div id="canvas-toolbar">
+            <div class="canvas-toolbar-left">
+              <select id="zoom-select" class="zoom-select">
+                <option value="25">25%</option>
+                <option value="50">50%</option>
+                <option value="75">75%</option>
+                <option value="100" selected>100%</option>
+                <option value="150">150%</option>
+                <option value="200">200%</option>
+                <option value="400">400%</option>
+                <option value="fit">Fit</option>
+              </select>
+              <button class="canvas-tool-btn" id="btn-canvas-zoom-in" title="Zoom In">+</button>
+              <button class="canvas-tool-btn" id="btn-canvas-zoom-out" title="Zoom Out">-</button>
+            </div>
+            <div class="canvas-toolbar-center">
+              <span id="canvas-size-label">512 × 512</span>
+            </div>
+            <div class="canvas-toolbar-right">
+              <button class="canvas-tool-btn toggle" id="btn-toggle-grid-canvas" title="Grid">⊞</button>
+              <button class="canvas-tool-btn toggle" id="btn-toggle-rulers" title="Rulers">📏</button>
+              <button class="canvas-tool-btn toggle" id="btn-toggle-transparent-bg" title="Transparent Background">◻</button>
+            </div>
+          </div>
+
+          <div id="canvas-viewport">
+            <div id="canvas-ruler-corner"></div>
+            <div id="ruler-h" class="ruler ruler-h"><canvas id="ruler-canvas-h"></canvas></div>
+            <div id="ruler-v" class="ruler ruler-v"><canvas id="ruler-canvas-v"></canvas></div>
+            <div id="canvas-scroll-container">
+              <div id="canvas-container">
+                <canvas id="main-canvas"></canvas>
+                <canvas id="overlay-canvas"></canvas>
+                <div id="selection-box"></div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- Right Sidebar: Properties -->
+        <aside id="right-sidebar">
+          <!-- Properties Panel -->
+          <div id="properties-panel">
+            <div class="panel-header">
+              <span class="panel-title" id="properties-title">Properties</span>
+            </div>
+            <div id="properties-content">
+              <!-- Transform -->
+              <div class="prop-section" id="prop-transform">
+                <div class="prop-section-header collapsible active" data-target="prop-transform-body">Transform</div>
+                <div class="prop-section-body" id="prop-transform-body">
+                  <div class="prop-row">
+                    <label>X</label>
+                    <div class="prop-input-group">
+                      <input type="number" id="prop-x" class="prop-input" value="0" step="1" />
+                      <span class="prop-unit">px</span>
+                    </div>
+                    <label>Y</label>
+                    <div class="prop-input-group">
+                      <input type="number" id="prop-y" class="prop-input" value="0" step="1" />
+                      <span class="prop-unit">px</span>
+                    </div>
+                  </div>
+                  <div class="prop-row">
+                    <label>W</label>
+                    <div class="prop-input-group">
+                      <input type="number" id="prop-w" class="prop-input" value="100" step="1" />
+                      <span class="prop-unit">px</span>
+                    </div>
+                    <label>H</label>
+                    <div class="prop-input-group">
+                      <input type="number" id="prop-h" class="prop-input" value="100" step="1" />
+                      <span class="prop-unit">px</span>
+                    </div>
+                  </div>
+                  <div class="prop-row">
+                    <label>Rotation</label>
+                    <div class="prop-input-group prop-wide">
+                      <input type="number" id="prop-rotation" class="prop-input" value="0" step="1" />
+                      <span class="prop-unit">°</span>
+                    </div>
+                  </div>
+                  <div class="prop-row">
+                    <label>Scale X</label>
+                    <div class="prop-input-group">
+                      <input type="number" id="prop-scale-x" class="prop-input" value="100" step="1" />
+                      <span class="prop-unit">%</span>
+                    </div>
+                    <label>Scale Y</label>
+                    <div class="prop-input-group">
+                      <input type="number" id="prop-scale-y" class="prop-input" value="100" step="1" />
+                      <span class="prop-unit">%</span>
+                    </div>
+                  </div>
+                  <div class="prop-row">
+                    <label>Anchor X</label>
+                    <div class="prop-input-group">
+                      <input type="number" id="prop-anchor-x" class="prop-input" value="0" step="0.1" />
+                    </div>
+                    <label>Anchor Y</label>
+                    <div class="prop-input-group">
+                      <input type="number" id="prop-anchor-y" class="prop-input" value="0" step="0.1" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Appearance -->
+              <div class="prop-section" id="prop-appearance">
+                <div class="prop-section-header collapsible active" data-target="prop-appearance-body">Appearance</div>
+                <div class="prop-section-body" id="prop-appearance-body">
+                  <div class="prop-row">
+                    <label>Opacity</label>
+                    <div class="prop-input-group prop-wide">
+                      <input type="range" id="prop-opacity-slider" class="prop-slider" min="0" max="100" value="100" />
+                      <input type="number" id="prop-opacity" class="prop-input prop-input-sm" value="100" min="0" max="100" />
+                      <span class="prop-unit">%</span>
+                    </div>
+                  </div>
+                  <div class="prop-row">
+                    <label>Blend Mode</label>
+                    <select id="prop-blend-mode" class="prop-select">
+                      <option value="normal">Normal</option>
+                      <option value="multiply">Multiply</option>
+                      <option value="screen">Screen</option>
+                      <option value="overlay">Overlay</option>
+                      <option value="darken">Darken</option>
+                      <option value="lighten">Lighten</option>
+                      <option value="color-dodge">Color Dodge</option>
+                      <option value="color-burn">Color Burn</option>
+                      <option value="hard-light">Hard Light</option>
+                      <option value="soft-light">Soft Light</option>
+                      <option value="difference">Difference</option>
+                      <option value="exclusion">Exclusion</option>
+                      <option value="hue">Hue</option>
+                      <option value="saturation">Saturation</option>
+                      <option value="color">Color</option>
+                      <option value="luminosity">Luminosity</option>
+                    </select>
+                  </div>
+                  <div class="prop-row">
+                    <label>Visibility</label>
+                    <input type="checkbox" id="prop-visible" class="prop-checkbox" checked />
+                    <label>Lock</label>
+                    <input type="checkbox" id="prop-locked" class="prop-checkbox" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Fill -->
+              <div class="prop-section" id="prop-fill">
+                <div class="prop-section-header collapsible active" data-target="prop-fill-body">
+                  Fill
+                  <div class="prop-section-actions">
+                    <button class="prop-add-btn" id="btn-add-fill" title="Add Fill">+</button>
+                  </div>
+                </div>
+                <div class="prop-section-body" id="prop-fill-body">
+                  <div class="fill-item" id="fill-primary">
+                    <div class="fill-type-tabs">
+                      <button class="fill-tab active" data-fill-type="solid">Solid</button>
+                      <button class="fill-tab" data-fill-type="linear">Linear</button>
+                      <button class="fill-tab" data-fill-type="radial">Radial</button>
+                      <button class="fill-tab" data-fill-type="none">None</button>
+                    </div>
+                    <div class="fill-solid-content">
+                      <div class="color-preview-row">
+                        <div class="color-swatch-large" id="fill-color-swatch" style="background:#4F46E5;"></div>
+                        <div class="color-hex-row">
+                          <span class="color-label">#</span>
+                          <input type="text" id="fill-hex-input" class="color-hex-input" value="4F46E5" maxlength="6" />
+                        </div>
+                        <div class="opacity-row">
+                          <input type="range" id="fill-opacity-slider" class="prop-slider" min="0" max="100" value="100" />
+                          <input type="number" id="fill-opacity-input" class="prop-input prop-input-sm" value="100" min="0" max="100" />
+                          <span class="prop-unit">%</span>
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Gradient editor (hidden by default) -->
+                    <div class="fill-gradient-content hidden" id="fill-gradient-editor">
+                      <canvas id="gradient-preview-canvas" width="220" height="24"></canvas>
+                      <div id="gradient-stops-bar">
+                        <div class="gradient-track" id="gradient-track">
+                          <!-- Stops added dynamically -->
+                        </div>
+                      </div>
+                      <div id="gradient-stop-props">
+                        <label>Stop Color:</label>
+                        <input type="color" id="gradient-stop-color" value="#4F46E5" />
+                        <label>Stop Pos:</label>
+                        <input type="number" id="gradient-stop-pos" class="prop-input" value="0" min="0" max="100" step="1" />
+                        <span class="prop-unit">%</span>
+                      </div>
+                      <div class="gradient-angle-row">
+                        <label>Angle:</label>
+                        <input type="number" id="gradient-angle" class="prop-input" value="0" min="0" max="360" />
+                        <span class="prop-unit">°</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stroke -->
+              <div class="prop-section" id="prop-stroke">
+                <div class="prop-section-header collapsible active" data-target="prop-stroke-body">
+                  Stroke
+                  <div class="prop-section-actions">
+                    <button class="prop-add-btn" id="btn-add-stroke">+</button>
+                  </div>
+                </div>
+                <div class="prop-section-body" id="prop-stroke-body">
+                  <div class="prop-row">
+                    <div class="color-swatch-small" id="stroke-color-swatch" style="background:#ffffff;"></div>
+                    <span class="color-label">#</span>
+                    <input type="text" id="stroke-hex-input" class="color-hex-input" value="ffffff" maxlength="6" />
+                  </div>
+                  <div class="prop-row">
+                    <label>Width</label>
+                    <div class="prop-input-group prop-wide">
+                      <input type="range" id="stroke-width-slider" class="prop-slider" min="0" max="50" value="2" />
+                      <input type="number" id="stroke-width" class="prop-input prop-input-sm" value="2" min="0" />
+                      <span class="prop-unit">px</span>
+                    </div>
+                  </div>
+                  <div class="prop-row">
+                    <label>Cap</label>
+                    <select id="stroke-cap" class="prop-select">
+                      <option value="butt">Butt</option>
+                      <option value="round">Round</option>
+                      <option value="square">Square</option>
+                    </select>
+                    <label>Join</label>
+                    <select id="stroke-join" class="prop-select">
+                      <option value="miter">Miter</option>
+                      <option value="round">Round</option>
+                      <option value="bevel">Bevel</option>
+                    </select>
+                  </div>
+                  <div class="prop-row">
+                    <label>Dash</label>
+                    <input type="text" id="stroke-dash" class="prop-input prop-wide" placeholder="e.g. 5,3" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Effects -->
+              <div class="prop-section" id="prop-effects">
+                <div class="prop-section-header collapsible" data-target="prop-effects-body">
+                  Effects
+                  <div class="prop-section-actions">
+                    <button class="prop-add-btn" id="btn-add-effect">+</button>
+                  </div>
+                </div>
+                <div class="prop-section-body collapsed" id="prop-effects-body">
+                  <div class="effects-list" id="effects-list">
+                    <p class="empty-hint">No effects. Click + to add.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Animation (Layer Keyframes) -->
+              <div class="prop-section" id="prop-animation">
+                <div class="prop-section-header collapsible" data-target="prop-anim-body">Animation</div>
+                <div class="prop-section-body collapsed" id="prop-anim-body">
+                  <div class="anim-prop-list" id="anim-prop-list">
+                    <div class="anim-prop-row">
+                      <button class="keyframe-diamond" id="kf-position" title="Position keyframe">◆</button>
+                      <span>Position</span>
+                    </div>
+                    <div class="anim-prop-row">
+                      <button class="keyframe-diamond" id="kf-scale" title="Scale keyframe">◆</button>
+                      <span>Scale</span>
+                    </div>
+                    <div class="anim-prop-row">
+                      <button class="keyframe-diamond" id="kf-rotation" title="Rotation keyframe">◆</button>
+                      <span>Rotation</span>
+                    </div>
+                    <div class="anim-prop-row">
+                      <button class="keyframe-diamond" id="kf-opacity" title="Opacity keyframe">◆</button>
+                      <span>Opacity</span>
+                    </div>
+                    <div class="anim-prop-row">
+                      <button class="keyframe-diamond" id="kf-fill" title="Fill Color keyframe">◆</button>
+                      <span>Fill Color</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Color Theme Presets -->
+          <div id="color-presets-panel">
+            <div class="panel-header">
+              <span class="panel-title">Color Presets</span>
+              <button class="panel-action-btn" id="btn-add-color-preset">+</button>
+            </div>
+            <div id="presets-content">
+              <div class="preset-tabs">
+                <button class="preset-tab active" data-preset-tab="swatches">Swatches</button>
+                <button class="preset-tab" data-preset-tab="gradients">Gradients</button>
+                <button class="preset-tab" data-preset-tab="themes">Themes</button>
+              </div>
+              <div class="preset-tab-content" id="swatches-content">
+                <!-- Color swatches populated dynamically -->
+              </div>
+              <div class="preset-tab-content hidden" id="gradients-content">
+                <!-- Gradients populated dynamically -->
+              </div>
+              <div class="preset-tab-content hidden" id="themes-content">
+                <!-- Color themes populated dynamically -->
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Bottom: Timeline -->
+      <div id="timeline-panel">
+        <div id="timeline-header">
+          <div class="timeline-layer-col-header">
+            <span>Layers</span>
+          </div>
+          <div class="timeline-ruler-col-header" id="timeline-ruler-header">
+            <canvas id="timeline-ruler-canvas"></canvas>
+          </div>
+        </div>
+        <div id="timeline-body">
+          <div id="timeline-layers-col">
+            <!-- Layer rows -->
+          </div>
+          <div id="timeline-tracks-col">
+            <div id="timeline-playhead-container">
+              <div id="timeline-playhead"></div>
+            </div>
+            <!-- Track rows -->
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /editor-layout -->
+  </div><!-- /app -->
+
+  <!-- Modals -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <!-- New Project Modal -->
+    <div class="modal hidden" id="modal-new-project">
+      <div class="modal-header">
+        <h2>New Project</h2>
+        <button class="modal-close" id="close-modal-new">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-grid">
+          <div class="project-template" data-w="512" data-h="512" data-fps="30" data-dur="90">
+            <div class="template-preview telegram">
+              <span>512×512</span>
+            </div>
+            <p>Telegram Sticker</p>
+            <small>512×512 · 30fps</small>
+          </div>
+          <div class="project-template" data-w="800" data-h="600" data-fps="60" data-dur="180">
+            <div class="template-preview web">
+              <span>800×600</span>
+            </div>
+            <p>Web Animation</p>
+            <small>800×600 · 60fps</small>
+          </div>
+          <div class="project-template" data-w="1920" data-h="1080" data-fps="30" data-dur="300">
+            <div class="template-preview fullhd">
+              <span>1920×1080</span>
+            </div>
+            <p>Full HD</p>
+            <small>1920×1080 · 30fps</small>
+          </div>
+          <div class="project-template" data-w="400" data-h="400" data-fps="24" data-dur="60">
+            <div class="template-preview icon">
+              <span>400×400</span>
+            </div>
+            <p>Animated Icon</p>
+            <small>400×400 · 24fps</small>
+          </div>
+        </div>
+        <div class="modal-custom-size">
+          <h3>Custom Size</h3>
+          <div class="form-row">
+            <label>Width</label><input type="number" id="new-proj-w" value="512" class="form-input" />
+            <label>Height</label><input type="number" id="new-proj-h" value="512" class="form-input" />
+            <label>FPS</label><input type="number" id="new-proj-fps" value="30" class="form-input" />
+            <label>Duration</label><input type="number" id="new-proj-dur" value="90" class="form-input" /><span>frames</span>
+          </div>
+          <div class="form-row">
+            <label>Background</label>
+            <input type="color" id="new-proj-bg" value="#1a1a2e" class="form-color" />
+            <label>Transparent</label>
+            <input type="checkbox" id="new-proj-transparent" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="btn-cancel-new-project">Cancel</button>
+        <button class="btn-primary" id="btn-create-project">Create Project</button>
+      </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div class="modal hidden" id="modal-export">
+      <div class="modal-header">
+        <h2>Export</h2>
+        <button class="modal-close" id="close-modal-export">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="export-format-grid" id="export-format-grid">
+          <div class="export-format-card active" data-format="lottie">
+            <div class="export-format-icon">🎬</div>
+            <div class="export-format-name">Lottie JSON</div>
+            <div class="export-format-ext">.json</div>
+          </div>
+          <div class="export-format-card" data-format="dotlottie">
+            <div class="export-format-icon">✨</div>
+            <div class="export-format-name">dotLottie</div>
+            <div class="export-format-ext">.lottie</div>
+          </div>
+          <div class="export-format-card" data-format="tgs">
+            <div class="export-format-icon">📱</div>
+            <div class="export-format-name">TGS (Telegram)</div>
+            <div class="export-format-ext">.tgs</div>
+          </div>
+          <div class="export-format-card" data-format="gif">
+            <div class="export-format-icon">🎞</div>
+            <div class="export-format-name">GIF</div>
+            <div class="export-format-ext">.gif</div>
+          </div>
+          <div class="export-format-card" data-format="png">
+            <div class="export-format-icon">🖼</div>
+            <div class="export-format-name">PNG (Frame)</div>
+            <div class="export-format-ext">.png</div>
+          </div>
+          <div class="export-format-card" data-format="png-seq">
+            <div class="export-format-icon">🎴</div>
+            <div class="export-format-name">PNG Sequence</div>
+            <div class="export-format-ext">.zip</div>
+          </div>
+          <div class="export-format-card" data-format="jpeg">
+            <div class="export-format-icon">📷</div>
+            <div class="export-format-name">JPEG (Frame)</div>
+            <div class="export-format-ext">.jpg</div>
+          </div>
+          <div class="export-format-card" data-format="svg">
+            <div class="export-format-icon">⬡</div>
+            <div class="export-format-name">SVG</div>
+            <div class="export-format-ext">.svg</div>
+          </div>
+          <div class="export-format-card" data-format="webm">
+            <div class="export-format-icon">🎥</div>
+            <div class="export-format-name">WebM Video</div>
+            <div class="export-format-ext">.webm</div>
+          </div>
+        </div>
+        <div class="export-options" id="export-options">
+          <div class="form-row">
+            <label>Scale</label>
+            <select id="export-scale" class="form-select">
+              <option value="1">1x</option>
+              <option value="2">2x</option>
+              <option value="3">3x</option>
+            </select>
+            <label>Quality</label>
+            <input type="range" id="export-quality" min="0.1" max="1" step="0.1" value="0.92" />
+            <span id="export-quality-display">92%</span>
+          </div>
+          <div class="form-row" id="export-gif-options" style="display:none">
+            <label>GIF FPS</label>
+            <input type="number" id="export-gif-fps" value="15" class="form-input" min="1" max="60" />
+            <label>Dither</label>
+            <select id="export-gif-dither" class="form-select">
+              <option value="false">None</option>
+              <option value="true">Floyd-Steinberg</option>
+            </select>
+          </div>
+        </div>
+        <div id="export-progress" class="export-progress hidden">
+          <div class="export-progress-bar" id="export-progress-bar"></div>
+          <span id="export-progress-label">Exporting... 0%</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="btn-cancel-export">Cancel</button>
+        <button class="btn-primary" id="btn-do-export">Export</button>
+      </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div class="modal hidden" id="modal-shortcuts">
+      <div class="modal-header">
+        <h2>Keyboard Shortcuts</h2>
+        <button class="modal-close" id="close-modal-shortcuts">✕</button>
+      </div>
+      <div class="modal-body shortcuts-modal-body">
+        <div class="shortcuts-col">
+          <h3>File</h3>
+          <div class="shortcut-row"><kbd>Ctrl+N</kbd><span>New Project</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+O</kbd><span>Open</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+S</kbd><span>Save</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+Shift+S</kbd><span>Save As</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+E</kbd><span>Export</span></div>
+          <h3>Edit</h3>
+          <div class="shortcut-row"><kbd>Ctrl+Z</kbd><span>Undo</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+Y</kbd><span>Redo</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+D</kbd><span>Duplicate</span></div>
+          <div class="shortcut-row"><kbd>Del</kbd><span>Delete</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+A</kbd><span>Select All</span></div>
+        </div>
+        <div class="shortcuts-col">
+          <h3>Tools</h3>
+          <div class="shortcut-row"><kbd>V</kbd><span>Select</span></div>
+          <div class="shortcut-row"><kbd>A</kbd><span>Direct Select</span></div>
+          <div class="shortcut-row"><kbd>R</kbd><span>Rectangle</span></div>
+          <div class="shortcut-row"><kbd>E</kbd><span>Ellipse</span></div>
+          <div class="shortcut-row"><kbd>P</kbd><span>Pen/Path</span></div>
+          <div class="shortcut-row"><kbd>T</kbd><span>Text</span></div>
+          <div class="shortcut-row"><kbd>H</kbd><span>Hand</span></div>
+          <div class="shortcut-row"><kbd>Z</kbd><span>Zoom</span></div>
+          <h3>Canvas</h3>
+          <div class="shortcut-row"><kbd>Ctrl++</kbd><span>Zoom In</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+-</kbd><span>Zoom Out</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+0</kbd><span>Fit to Window</span></div>
+        </div>
+        <div class="shortcuts-col">
+          <h3>Playback</h3>
+          <div class="shortcut-row"><kbd>Space</kbd><span>Play/Pause</span></div>
+          <div class="shortcut-row"><kbd>Home</kbd><span>Go to Start</span></div>
+          <div class="shortcut-row"><kbd>End</kbd><span>Go to End</span></div>
+          <div class="shortcut-row"><kbd>,</kbd><span>Step Back</span></div>
+          <div class="shortcut-row"><kbd>.</kbd><span>Step Forward</span></div>
+          <div class="shortcut-row"><kbd>K</kbd><span>Add Keyframe</span></div>
+          <h3>Layers</h3>
+          <div class="shortcut-row"><kbd>Ctrl+G</kbd><span>Group</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+Shift+G</kbd><span>Ungroup</span></div>
+          <div class="shortcut-row"><kbd>]</kbd><span>Bring Forward</span></div>
+          <div class="shortcut-row"><kbd>[</kbd><span>Send Backward</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Color Picker Modal -->
+    <div class="modal modal-sm hidden" id="modal-color-picker">
+      <div class="modal-header">
+        <h2>Color Picker</h2>
+        <button class="modal-close" id="close-modal-color">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="color-picker-container">
+          <div id="color-spectrum">
+            <canvas id="color-spectrum-canvas" width="220" height="150"></canvas>
+            <div id="color-spectrum-cursor"></div>
+          </div>
+          <div id="color-hue-bar">
+            <canvas id="color-hue-canvas" width="220" height="16"></canvas>
+            <div id="color-hue-cursor"></div>
+          </div>
+          <div id="color-alpha-bar">
+            <canvas id="color-alpha-canvas" width="220" height="16"></canvas>
+            <div id="color-alpha-cursor"></div>
+          </div>
+          <div id="color-inputs-row">
+            <div id="color-preview-box" style="background:#4F46E5;"></div>
+            <div class="color-mode-tabs">
+              <button class="color-mode-tab active" data-mode="hex">HEX</button>
+              <button class="color-mode-tab" data-mode="rgb">RGB</button>
+              <button class="color-mode-tab" data-mode="hsl">HSL</button>
+            </div>
+          </div>
+          <div id="color-hex-display">
+            <input type="text" id="cp-hex" class="cp-input" value="#4F46E5" maxlength="7" />
+          </div>
+          <div id="color-rgb-display" class="hidden">
+            <input type="number" id="cp-r" class="cp-input-sm" value="79" min="0" max="255" />
+            <input type="number" id="cp-g" class="cp-input-sm" value="70" min="0" max="255" />
+            <input type="number" id="cp-b" class="cp-input-sm" value="229" min="0" max="255" />
+          </div>
+          <div id="color-hsl-display" class="hidden">
+            <input type="number" id="cp-h" class="cp-input-sm" value="243" min="0" max="360" />
+            <input type="number" id="cp-s" class="cp-input-sm" value="75" min="0" max="100" />
+            <input type="number" id="cp-l" class="cp-input-sm" value="59" min="0" max="100" />
+          </div>
+          <div id="color-palette-row">
+            <!-- Dynamic color swatches -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="btn-cancel-color">Cancel</button>
+        <button class="btn-primary" id="btn-apply-color">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div id="context-menu" class="context-menu hidden">
+    <div class="context-item" id="ctx-cut">Cut</div>
+    <div class="context-item" id="ctx-copy">Copy</div>
+    <div class="context-item" id="ctx-paste">Paste</div>
+    <div class="context-separator"></div>
+    <div class="context-item" id="ctx-duplicate">Duplicate</div>
+    <div class="context-item" id="ctx-delete">Delete</div>
+    <div class="context-separator"></div>
+    <div class="context-item" id="ctx-bring-forward">Bring Forward</div>
+    <div class="context-item" id="ctx-send-backward">Send Backward</div>
+    <div class="context-separator"></div>
+    <div class="context-item" id="ctx-group">Group</div>
+    <div class="context-item" id="ctx-ungroup">Ungroup</div>
+    <div class="context-separator"></div>
+    <div class="context-item" id="ctx-add-keyframe">Add Keyframe</div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast-container"></div>
+
+  <!-- Hidden file input -->
+  <input type="file" id="file-import-input" accept=".json,.lottie,.tgs,.gif,.png,.jpg,.jpeg,.svg,.zip" style="display:none" multiple />
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
